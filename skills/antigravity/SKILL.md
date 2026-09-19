@@ -672,8 +672,5 @@ output, re-read your summary against the three rules above before presenting it:
 evaluative verb verbatim, count inline citations as well as bullets, and check each cited path
 against the repository.
 
-If a reviewer subagent is available, run it on the summary as well. It is an optional
-enhancement, and the skill works without it.
-
 **Short-output exception:** output under roughly 200 words with no bullets, numbered findings,
 or `file:line` citations has too little surface area for these failure modes. Skip the pass.
