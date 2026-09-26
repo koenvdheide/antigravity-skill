@@ -1,6 +1,6 @@
 {
   "name": "antigravity",
-  "version": "2.1.1",
+  "version": "2.1.2",
   "description": "Wraps the Antigravity CLI (agy) as an independent analysis partner — /antigravity:antigravity skill supports brainstorm, red-team, diff-review, exhausted-hypotheses, attack-surface and other modes from a non-Claude model family. Replaces the gemini plugin",
   "author": {
     "name": "Koen van der Heide",

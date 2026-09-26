@@ -8,6 +8,10 @@ Gives Claude Code a structured way to delegate analysis to Antigravity: brainsto
 
 The skill runs `agy` headless (`--print`) in plan mode. Google documents [the permission model](https://antigravity.google/docs/cli/permissions) and leaves print mode undocumented, so the skill covers what headless operation actually does: how to get content in (stdin piping does not work), and how to tell a finished review from one that stopped early.
 
+## Architectural ownership
+
+For code and technical-plan reviews, the skill requires an [ownership checklist](skills/antigravity/references/architectural-ownership.md) in every review prompt, including convergence rounds. It asks the reviewer to trace behaviour to its owning component, including dependencies and forks outside the diff, and distinguish legitimate adapter translation from compensation for another component's defect. Findings must name the proper owner and smallest fix there, or identify missing evidence. Explain mode omits this check.
+
 ## Prerequisites
 
 - [Claude Code](https://claude.ai/code)
