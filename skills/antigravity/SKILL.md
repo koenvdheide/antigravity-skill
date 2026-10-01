@@ -377,7 +377,8 @@ a rule when one is needed; leave `settings.json` to the user.
 Run `agy models` for the live list. Pin a model explicitly on every invocation.
 
 Default to a **Gemini** model and take the exact ID from `agy models`. Absent a reason to do
-otherwise, pick the highest-numbered release on offer at its `-high` effort suffix.
+otherwise, pick the highest-numbered release on offer, at the effort suffix the table below
+gives for the task.
 
 Do not read Pro as the deep tier and Flash as the fast one. Google has been shipping its
 strongest coding and agentic capability in the Flash releases, and the Pro line trails them in
@@ -387,6 +388,17 @@ Check the model's own card when the choice matters.
 Effort suffixes (`-high` / `-medium` / `-low`) vary by release, and not every model carries all
 three. A separate `--effort` flag also exists; prefer the suffix and do not assume the two
 compose.
+
+Set the suffix from the mode, the way the companion `codex` plugin sets reasoning effort:
+
+| Suffix | Modes |
+| ------ | ----- |
+| `-medium` | Explain, and any prose pass (grammar, spelling, reading a draft) |
+| `-high` | Brainstorm, Red-team, Diff Review, Attack Surface, Exhausted Hypotheses |
+
+Gemini stops at `-high`, so there is no equivalent of the `xhigh` and `max` levels Codex offers.
+A review that wants one of those belongs with `codex` on Astra. The Pro line omits `-medium`
+entirely, which is one more reason the newest Flash is the default here.
 
 **Flash is the right default for convergence mode.** A convergence loop pays the model cost
 once per round, and rounds are the point, so a fast cheap model that answers in a couple of
