@@ -32,13 +32,9 @@ prints the response to stdout. Use it for an independent read on an artifact you
 
 ## When to Use
 
-- Have a Codex answer you want to cross-check, or need reasoning from a non-Anthropic model
-- Content is too large for Codex to take comfortably
-- Codex is unavailable: rate-limited, auth broken, CLI failing, or erroring
-
-These bullets assume Codex is the reviewer you reach for first, as the companion `codex`
-plugin provides. Without it, read "Codex" as whichever reviewer you try before this one, and
-the ordering still holds.
+- Need reasoning from a non-Anthropic model, or want another reviewer's answer cross-checked
+- Content is too large for the reviewer you tried first to take comfortably
+- The reviewer you would normally reach for is unavailable: rate-limited, auth broken, CLI failing, or erroring
 
 **"Review it with gemini" means this skill.** `agy` runs Gemini models by default, and this
 plugin replaced an earlier `gemini` plugin that wrapped Google's standalone Gemini CLI. A
@@ -50,7 +46,7 @@ request naming Gemini is a request for this skill; the old CLI is no longer supp
 - Single-file mechanical edit (typo, rename, one-import change) with no new concepts
 - Answer is already in context, and nobody asked for an independent second opinion on it
 - Conversation is active back-and-forth, or the user signalled urgency, so a 1-5 min wait breaks flow
-- Already sent this same question to Antigravity this session *against an identical artifact*, or you are about to fire it and Codex on the same prompt in parallel. A convergence round is never a duplicate, because the artifact has changed. A prior Codex pass does not block one Antigravity cross-check; that cross-check is the point.
+- Already sent this same question to Antigravity this session *against an identical artifact*, or you are about to fire it and another reviewer on the same prompt in parallel. A convergence round is never a duplicate, because the artifact has changed. A prior pass by a different reviewer does not block an Antigravity cross-check; that cross-check is the point.
 - No specific artifact or concrete question, just a topic to "think about"
 - Prompt would contain secrets, credentials, or PII
 - A directory you would have to grant via `--add-dir` holds secrets or private data (see Prepare)
@@ -58,9 +54,8 @@ request naming Gemini is a request for this skill; the old CLI is no longer supp
 - Answer lives in library or tool docs, where fetching the docs directly is cheaper
 - Missing local facts. Reproduce the issue, inspect logs, run `rg`/`git`/`blame`, or ask the user first
 - Decision depends on product priority, compliance, or release timing you do not have. Ask the user, who owns it
-- Codex is available, the prompt fits comfortably, and nobody asked for an independent
-  cross-check. Antigravity is the fallback reviewer in that case. An explicit request for a
-  second, non-Anthropic opinion outranks this bullet
+- Nobody asked for an independent cross-check and the question does not need a non-Anthropic
+  read. An explicit request for a second opinion outranks this bullet
 
 ## Precedence
 
@@ -197,7 +192,7 @@ tail -1 c:/tmp/agy-redteam-auth.out | tr -d '\r' \
 agy --print "Explain the module at C:\\path\\to\\src\\parser.rs. Flag anything that looks like a bug.
 Simplicity bar: prefer deletion or inlining; for any addition, name the failure the smaller option cannot cover.
 As the very last line of your response, output exactly: <<<AGY_COMPLETE:$N>>>" \
-  --mode plan --model gemini-3.8-flash-high \
+  --mode plan --model gemini-3.8-flash-medium \
   --add-dir "$(cygpath -w /c/path/to/src)" --print-timeout 15m \
   > c:/tmp/agy-explain-parser.out 2> c:/tmp/agy-explain-parser.err
 
@@ -221,8 +216,7 @@ tail -1 c:/tmp/agy-explain-parser.out | tr -d '\r' \
 
 ### Flags `agy` does not have
 
-These are the ones people reach for when carrying habits over from the Gemini or Codex CLI
-wrappers. None of them exist on `agy`:
+These are the ones people reach for when carrying habits over from other CLI wrappers. None of them exist on `agy`:
 
 `--output-file` · `-o` · `--approval-mode` · `-s` · `--allowed-mcp-server-names`
 
@@ -479,7 +473,7 @@ Rules:
 
 For code or technical-plan reviews, include the full [ownership checklist](references/architectural-ownership.md) in the reviewer prompt, outside the artifact. Apply it to every review recipe and convergence round; omit it for `explain`. Expand the ownership placeholders before invoking the CLI: a path or reminder alone does not give the reviewer the checklist.
 
-Each plugin ships its own copy so it can be installed independently. Keep the Codex and Antigravity copies aligned when updating this policy.
+Each plugin ships its own copy so it can be installed independently.
 
 ## Base Prompt Template
 
