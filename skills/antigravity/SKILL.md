@@ -88,9 +88,8 @@ Follow all four steps every time. Step 3 is what stops a truncated run being rep
 **Prefer B whenever the material sits in a directory you can safely grant**, and let the
 reviewer open the tree itself. A reviewer reading a diff alone sees only the changed hunks,
 so it cannot judge the changed lines against the file around them or find the related
-problem two hundred lines away. Measured on the same question against the same model: the
-inlined run reported four findings from the diff, and the `--add-dir` run reported five, two
-of them in unchanged lines the diff never contained. A model handed a complete inlined
+problem two hundred lines away. On the same question, a reviewer that can open the tree reports
+problems in unchanged lines the diff never contained. A model handed a complete inlined
 artifact may also still reach for `read_file` and lose the whole run to an auto-denial.
 
 Two things pull the other way. The privacy check below is the gate on B, and a tree you
@@ -103,8 +102,8 @@ the result.
 
 **Plain piped stdin does not work.** (`--input-format stream-json` is the documented route for
 feeding prompts on stdin; this skill does not use it.) `cat file | agy --print "..."` does not prepend the file the way
-some CLIs do. In an observed run the model tried to shell out to read the content instead,
-and that tool call was denied.
+some CLIs do. A model left without the content may try to shell out to read it instead, and
+headless cannot approve that call.
 
 Three routes, best first:
 
@@ -143,8 +142,8 @@ secrets, do not fire.
 ### What `--add-dir` actually grants
 
 Read **and write** inside the granted directory, with no rule and no prompt. Measured on agy
-1.2.14 under `--mode plan`: a run told to write created a new file and appended to an existing
-one, reported both, and stderr carried no denial. Google documents the same default, that
+1.2.14 under `--mode plan`, a run instructed to write creates and modifies files inside the
+granted directory, with no denial on stderr. Google documents the same default, that
 "reading and writing files inside your active project directory is automatically allowed".
 
 So `--add-dir` is not a read grant. Treat it as handing the directory over: anything beneath it
@@ -245,8 +244,8 @@ with no short form, and there is no output-file flag at all: redirect stdout ins
 **Never pass `--dangerously-skip-permissions`.** It auto-approves every tool permission
 request, removing the gate that blocks writes and shell commands. Upstream
 [issue #36](https://github.com/google-antigravity/antigravity-cli/issues/36) reports it can
-also authorise a sandbox bypass when combined with `--sandbox`. This flag was not probed
-locally, so the prohibition is skill policy rather than a measured result. If a run is
+also authorise a sandbox bypass when combined with `--sandbox`. The prohibition is skill policy rather than a
+measured result. If a run is
 blocked, see Recover for the right remedy. It is never a `write_file`, `command`, or
 `unsandboxed` grant.
 
@@ -318,8 +317,7 @@ that separates them.
 
 ### Read stderr every run
 
-Stderr is diagnostic when populated, and it can be empty even on a blocked run (see the
-observed failure above), so treat it as a source of detail rather than the denial oracle.
+Stderr is diagnostic when populated, and it can be empty even on a blocked run, so treat it as a source of detail rather than the denial oracle.
 When a denial is reported, the notice names the tool:
 
 ```
@@ -458,8 +456,8 @@ agy --print "<round 2 prompt, current artifact re-supplied and fenced, sentinel 
   > c:/tmp/agy-r2.json 2> c:/tmp/agy-r2.err
 ```
 
-Verified on agy 1.2.14: round 1 returned `status: SUCCESS` with a `conversation_id`, and
-resuming that id from a separate process recalled a number given in round 1.
+On agy 1.2.14 a `conversation_id` from one round resumes from a separate process, carrying the
+earlier context with it.
 
 Rules:
 
@@ -467,11 +465,10 @@ Rules:
   Stdout is the JSON envelope. Check the token against `d['response']`.
 - **Require `status == "SUCCESS"` as well as the sentinel.** A failed run sets `status` to
   `ERROR` and fills an `error` field, with `AGY_ERROR: {...}` on stderr carrying `error_code`
-  and `retryable` (measured: a 429 quota refusal came back exactly that way, with an empty
+  and `retryable` (a 429 quota refusal returns this shape, with an empty
   `response`). Route anything other than `SUCCESS` through Recover.
-- `status` does not replace the sentinel. No run measured here stopped partway while still
-  reporting `SUCCESS`, so there is no evidence either way for the silently-blocked-tool case
-  the sentinel exists to catch.
+- `status` does not replace the sentinel. Whether it catches a run that stops partway while
+  still reporting `SUCCESS` is unverified, and that is the case the sentinel exists to catch.
 - **An unknown ID does not fail the run.** `--conversation <id>` that matches nothing warns
   `conversation "<id>" not found` on **stderr**, then answers from an empty history and exits
   0. Stdout alone cannot tell that apart from a real resume, which is one more reason the
