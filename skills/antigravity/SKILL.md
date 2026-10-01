@@ -71,7 +71,6 @@ When to Use bullet matches at the same time.
   the two sections from drifting apart.
 - **When unsure which applies, ask** ("I'd skip Antigravity here because X; proceed anyway?")
   rather than deciding silently.
-- **Among WTU, pick the most specific.**
 
 # Prepare → Run → Validate → Recover
 
@@ -84,7 +83,7 @@ Follow all four steps every time. Step 3 is what stops a truncated run being rep
 | Profile | Use for | Flags |
 |---------|---------|-------|
 | **B. Workspace-reading** (default when the material is on disk) | Anything that lives in a repo or directory: diff review, explain, attack surface, exhausted hypotheses, red-team of committed code | `--mode plan --add-dir <smallest dir>` |
-| **A. Context-only** | Material with no file to point at: a plan or spec that exists only in the conversation, pasted logs, a design nobody has written down | `--mode plan` and no `--add-dir` |
+| **A. Inlined** | Material with no file to point at: a plan or spec that exists only in the conversation, pasted logs, a design nobody has written down | `--mode plan` and no `--add-dir` |
 
 **Prefer B whenever the material sits in a directory you can safely grant**, and let the
 reviewer open the tree itself. A reviewer reading a diff alone sees only the changed hunks,
@@ -111,8 +110,9 @@ Three routes, best first:
 
 - **Already on disk:** grant its smallest containing directory with `--add-dir` and name the
   paths in the prompt (Profile B). A repo, a worktree, a directory of logs. Say what to read:
-  a commit (`git show HEAD`), the files whose current state matters, and what the change was
-  meant to do. This is the default.
+  the files whose current state matters, and what the change was meant to do. Capture a
+  commit's diff yourself and paste it in, since a shell command inside the run needs an
+  approval headless cannot give. This is the default.
 - **Short artifact with no file:** inline it into the prompt via command substitution (Profile A). Measure
   first (`wc -c`), and measure the assembled command: the mode clause, template and simplicity
   bar run to well over a thousand characters before the artifact starts. Windows caps a whole
@@ -463,9 +463,13 @@ Rules:
 
 - **Under `--output-format json` the sentinel is the last line of `response`, not of stdout.**
   Stdout is the JSON envelope. Check the token against `d['response']`.
-- `status` is a second signal, and it is not a substitute for the sentinel: every run measured
-  here returned `SUCCESS`, so there is no evidence of what it reports for a silently blocked
-  tool.
+- **Require `status == "SUCCESS"` as well as the sentinel.** A failed run sets `status` to
+  `ERROR` and fills an `error` field, with `AGY_ERROR: {...}` on stderr carrying `error_code`
+  and `retryable` (measured: a 429 quota refusal came back exactly that way, with an empty
+  `response`). Route anything other than `SUCCESS` through Recover.
+- `status` does not replace the sentinel. No run measured here stopped partway while still
+  reporting `SUCCESS`, so there is no evidence either way for the silently-blocked-tool case
+  the sentinel exists to catch.
 - **An unknown ID does not fail the run.** `--conversation <id>` that matches nothing warns
   `conversation "<id>" not found` on **stderr**, then answers from an empty history and exits
   0. Stdout alone cannot tell that apart from a real resume, which is one more reason the
