@@ -344,7 +344,7 @@ shape narrows the search; it does not prove why a run failed.
 | Symptom | First thing to check | Fix |
 |---------|----------------------|-----|
 | Empty stdout, exit 0, stderr names a **read** permission | A `deny` or `ask` rule is shadowing the path, or the file sits outside the workspace | Inspect the effective Deny/Ask policy, then either inline the content (Profile A) or move the artifact into an unshadowed directory you pass with `--add-dir`. Adding an `allow` rule does not help, since Deny outranks Allow |
-| Empty stdout, exit 0, stderr names `write_file`, `command`, or `unsandboxed` | An operation outside what a review needs was attempted; the refusal does not say whether the prompt asked for it | **Do not grant it.** A review never needs to write or shell out, so treat this as a prompt that asked for too much. Rewrite the prompt to ask for analysis instead |
+| Empty stdout, exit 0, stderr names `write_file`, `command`, or `unsandboxed` | An operation outside what a review needs was attempted; the refusal does not say whether the prompt asked for it | **Do not grant it.** A review never needs to write or shell out. Narrow the prompt to analysis, and check what the run actually attempted before assuming the prompt caused it |
 | Stdout has narration but no sentinel | Run stopped early. A blocked tool is one cause; timeout, dropped auth, or network failure look the same | Discard output. Read stderr to identify the cause, then re-run after inlining the content, relocating the artifact, or raising the timeout. Never unblock it by granting a write or command rule |
 | No sentinel, stderr empty | Output shape cannot select a unique cause: an unfenced artifact that swallowed the sentinel instruction, a silently blocked tool, a timeout and a dropped connection all look like this | Discard the result. Re-read the prompt for an unfenced artifact, read stderr, and verify independently any effect the output narrates. Re-run only after an evidenced correction |
 | "must be an absolute path" | A relative path reached `--add-dir` or a tool | Pass absolute paths; on Git Bash use `$(cygpath -w …)` |
@@ -368,7 +368,8 @@ Rule forms: `read_file(*)`, `write_file(/path)`, `read_url(domain)`, `execute_ur
 Allow**. Unconfigured operations default to Ask, which headless mode auto-denies, with one
 measured exception: reads **and writes** inside a directory granted with `--add-dir` are allowed
 without any rule. Never add a `write_file`, `command`, or `unsandboxed` rule to unblock this
-skill; needing one means the prompt asked for something a review should not do.
+skill. Needing one means the run attempted something a review does not require, which is worth
+investigating before it is worth granting.
 
 `--mode plan` does not make a run read-only: the write probe above ran under it. Keep prompts
 read-only in intent, and treat the grant itself as unbounded until probed. Propose a
@@ -464,10 +465,12 @@ Rules:
 
 - **Under `--output-format json` the sentinel is the last line of `response`, not of stdout.**
   Stdout is the JSON envelope. Check the token against `d['response']`.
-- **Require `status == "SUCCESS"` as well as the sentinel.** A failed run sets `status` to
-  `ERROR` and fills an `error` field, with `AGY_ERROR: {...}` on stderr carrying `error_code`
-  and `retryable` (a 429 quota refusal returns this shape, with an empty
-  `response`). Route anything other than `SUCCESS` through Recover.
+- **Require `status == "SUCCESS"` as well as the sentinel.** Route anything else through
+  Recover. A run that fails after starting a turn reports it in the envelope: a 429 quota refusal
+  returns `status: ERROR`, an `error` field and an empty `response`, with `AGY_ERROR: {...}` on
+  stderr carrying `error_code` and `retryable`. A run rejected before that, such as an unknown
+  flag, produces no envelope at all: exit 2 and plain stderr, as the Recover table shows. So a
+  missing or unparsable JSON envelope is itself a failure, not a reason to look for `status`.
 - `status` does not replace the sentinel. Whether it catches a run that stops partway while
   still reporting `SUCCESS` is unverified, and that is the case the sentinel exists to catch.
 - **An unknown ID does not fail the run.** `--conversation <id>` that matches nothing warns
