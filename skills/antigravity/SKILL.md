@@ -118,8 +118,8 @@ Three routes, best first:
 - **Already on disk:** grant its smallest containing directory with `--add-dir` and name the
   paths in the prompt (Profile B). A repo, a worktree, a directory of logs. Say what to read:
   the files whose current state matters, and what the change was meant to do. Capture a
-  commit's diff yourself and paste it in, since a shell command inside the run needs an
-  approval headless cannot give. This is the default.
+  commit's diff yourself and paste it in, rather than relying on the run to shell out for it.
+  This is the default.
 - **Short artifact:** inline it into the prompt via command substitution (Profile A). Measure
   first (`wc -c`), and measure the assembled command: the mode clause, template and simplicity
   bar run to well over a thousand characters before the artifact starts. Windows caps a whole
@@ -678,11 +678,11 @@ add-machinery ones.
 
 ## Summarization Fidelity
 
-Three rules, ordered by how often they are broken.
+Three rules.
 
 ### 1. Quote evaluative language verbatim
 
-Model verbs are calibrated. "I disagree" is weaker than "rejects". "Too narrow" is weaker than
+Quote the verb. "I disagree" is weaker than "rejects". "Too narrow" is weaker than
 "misses an entire class". When compressing, quote the verb rather than reaching for a stronger
 synonym.
 
@@ -703,5 +703,6 @@ output, re-read your summary against the three rules above before presenting it:
 evaluative verb verbatim, count inline citations as well as bullets, and check each cited path
 against the repository.
 
-**Short-output exception:** output under roughly 200 words with no bullets, numbered findings,
-or `file:line` citations has too little surface area for these failure modes. Skip the pass.
+**Short-output exception:** the pass can be skipped for output under roughly 200 words with no
+bullets, numbered findings or `file:line` citations. That is a cost decision, not a guarantee:
+strength amplification fits in a single sentence.
