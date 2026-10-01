@@ -83,7 +83,7 @@ Follow all four steps every time. Step 3 is what stops a truncated run being rep
 | Profile | Use for | Flags |
 |---------|---------|-------|
 | **B. Workspace-reading** (default when the material is on disk) | Anything that lives in a repo or directory: diff review, explain, attack surface, exhausted hypotheses, red-team of committed code | `--mode plan --add-dir <smallest dir>` |
-| **A. Inlined** | Material with no file to point at: a plan or spec that exists only in the conversation, pasted logs, a design nobody has written down | `--mode plan` and no `--add-dir` |
+| **A. Inlined** | You supply the content in the prompt, whether or not it also exists as a file | `--mode plan` and no `--add-dir` |
 
 **Prefer B whenever the material sits in a directory you can safely grant**, and let the
 reviewer open the tree itself. A reviewer reading a diff alone sees only the changed hunks,
@@ -153,8 +153,10 @@ the job, and prefer a throwaway copy over a working tree you care about whenever
 allows it. This is why the privacy check above is the real gate: the grant is the directory, and
 nothing narrower.
 
-Files outside the workspace default to Ask, which headless cannot prompt for, so they stay out
-of reach. Shell commands default to Ask the same way; that half is untested here.
+Neither profile has a verified isolation boundary. Google documents files outside the active
+project as Ask and shell commands likewise, and headless cannot prompt for either, but what the
+run can already reach through the project itself, pre-existing rules, the starting directory or a
+symlink is untested on 1.2.14. Grant on the assumption that the boundary is unproven.
 
 If a read is denied anyway, a `deny` rule is shadowing the path, since deny outranks
 everything. Check `~/.gemini/antigravity-cli/settings.json` and prefer moving the artifact
@@ -370,7 +372,7 @@ without any rule. Never add a `write_file`, `command`, or `unsandboxed` rule to 
 skill; needing one means the prompt asked for something a review should not do.
 
 `--mode plan` does not make a run read-only: the write probe above ran under it. Keep prompts
-read-only in intent, and rely on which directory you grant rather than on the mode. Propose a
+read-only in intent, and treat the grant itself as unbounded until probed. Propose a
 rule when one is needed; leave `settings.json` to the user.
 
 ## Model selection
