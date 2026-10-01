@@ -208,7 +208,7 @@ tail -1 c:/tmp/agy-explain-parser.out | tr -d '\r' \
 | `--mode plan` | Execution mode, and the default for every mode in this skill. The alternative, `accept-edits`, is for changing files, which this skill never does. |
 | `--model <id>` | Pin the model. Always set it (see Model selection). |
 | `--add-dir <abs>` | Add a directory to the workspace, repeatable. **Absolute paths only**; a relative path fails with "must be an absolute path". |
-| `--print-timeout <dur>` | Wait before giving up. Defaults to `5m`, which is short for a deep review. Set `15m` for anything substantial. |
+| `--print-timeout <dur>` | Wait before giving up. Defaults to `0s`, which waits until the turn completes. Set `15m` to bound a run. |
 | `--log-file <path>` | Redirect the CLI log. Needed to capture a conversation ID (see Sessions). |
 | `--conversation <id>` | Resume a specific conversation by ID. |
 | `-c` / `--continue` | Resume the most recent conversation. Racy; see Sessions. |
@@ -262,8 +262,9 @@ blocked, see Recover for the right remedy. It is never a `write_file`, `command`
   path works as-is. The problem case is a Windows `/tmp/…` output, which a subagent's isolated
   tool environment cannot resolve. The fix is to have written it to `c:/tmp/` in the first
   place; otherwise inline the content into the subagent prompt (up to roughly 50KB), or pass
-  `$(cygpath -w /tmp/…)`, which resolves a file genuinely written to Git Bash's `/tmp/`. Never
-  apply that conversion to a `c:/tmp/` output: it yields `%TEMP%`, which is somewhere else.
+  `$(cygpath -w /tmp/…)`, which resolves a file genuinely written to Git Bash's `/tmp/` and so
+  lands on `%TEMP%`. Converting a `c:/tmp/` path is harmless: `cygpath -w c:/tmp/x` gives
+  `C:\tmp\x`.
 
 ## 3. Validate
 
@@ -336,7 +337,6 @@ shape narrows the search; it does not prove why a run failed.
 | No sentinel, stderr empty, output stops mid-task or narrates a step whose effect you cannot confirm | Early stop with no notice. A silently blocked tool is one observed cause; a timeout or dropped connection looks identical | Verify the intended effect independently, since narration is never evidence it happened. Then re-run, inlining the content or raising the timeout once you know which applied |
 | "must be an absolute path" | A relative path reached `--add-dir` or a tool | Pass absolute paths; on Git Bash use `$(cygpath -w …)` |
 | "You are not logged into Antigravity" | Auth expired or absent | Log in to Antigravity again; the CLI reads a keyring-backed OAuth token |
-| Run dies at five minutes | Default `--print-timeout 5m` | Raise it (`--print-timeout 15m`) |
 | Allow-rule added but still denied | Permissions merge across project settings, shared Antigravity settings, and CLI settings, with **Deny > Ask > Allow** | Inspect the *effective* policy and look for a higher-precedence Deny or Ask, rather than adding another Allow |
 | Empty stdout, **exit 2**, stderr opens `flags provided but not defined:` | A flag that does not exist on `agy`, usually carried over from another CLI wrapper | Check it against the flag list above. Usual culprits: `--output-file`, `-o`, `--approval-mode`, `-s`, `--allowed-mcp-server-names` |
 | Model rejected | Stale model ID | Run `agy models` and pick from the live list |
