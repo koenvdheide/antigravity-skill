@@ -219,7 +219,8 @@ tail -1 c:/tmp/agy-explain-parser.out | tr -d '\r' \
 | `--model <id>` | Pin the model. Always set it (see Model selection). |
 | `--add-dir <abs>` | Add a directory to the workspace, repeatable. **Absolute paths only**; a relative path fails with "must be an absolute path". |
 | `--print-timeout <dur>` | Wait before giving up. Defaults to `0s`, which waits until the turn completes. Set `15m` to bound a run. |
-| `--log-file <path>` | Redirect the CLI log. Needed to capture a conversation ID (see Sessions). |
+| `--output-format <fmt>` | `text` (default) or `json`. JSON wraps the reply in an envelope carrying `conversation_id` and `status`. |
+| `--log-file <path>` | Redirect the CLI log. |
 | `--conversation <id>` | Resume a specific conversation by ID. |
 | `-c` / `--continue` | Resume the most recent conversation. Racy; see Sessions. |
 | `--sandbox` | Run with terminal restrictions. Platform support varies, so treat it as defence in depth on top of the permission gate rather than a guarantee, and confirm it applies on your platform before relying on it. |
