@@ -97,6 +97,15 @@ files while a review runs and its findings describe a version that no longer exi
 inlined artifact is frozen at send time. Finish your edits before firing, or expect to date
 the result.
 
+### Reviewing outside a git repository
+
+`agy` has no repository gate. `--add-dir` takes any absolute directory, and a directory that is
+not a repo works the same as one that is, so a spec in a scratch directory or a downloaded file
+needs no extra flag.
+
+That makes Profile B the easy route for a loose directory of files. For a diff with no repo to
+read it from, inline the content under Profile A and fence it.
+
 ### Get the content in
 
 **Plain piped stdin does not work.** (`--input-format stream-json` is the documented route for
