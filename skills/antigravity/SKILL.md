@@ -419,46 +419,52 @@ If one model is rate-limited, try another from `agy models` and report the switc
 Session resume works and is the backbone of convergence mode.
 
 `-c` / `--continue` resumes the *most recent* conversation, so two runs going at once can pick
-up each other's context. Use it only for a quick one-off. For anything multi-round, pin the ID:
+up each other's context. Use it only for a quick one-off. For anything multi-round, pin the ID.
+
+Ask for JSON and the ID comes back in the envelope. Google documents `conversation_id` as the
+"ID of the conversation, for resuming later", and `status` alongside it:
 
 ```bash
-LOG=c:/tmp/agy-review.log
 agy --print "<round 1 prompt, ending with the sentinel instruction>" \
-  --mode plan --model gemini-3.8-flash-high --print-timeout 15m \
-  --log-file "$(cygpath -w $LOG)" > c:/tmp/agy-r1.out 2> c:/tmp/agy-r1.err
-
-# Capture the ID ONCE, immediately, into a variable. --log-file truncates on every launch
-# (verified: a second run to the same path destroyed the first run's Created-conversation
-# line), so the log is not a durable store to re-read in later rounds.
-# sed, not awk positional fields: a $<digit> in a skill file can be rewritten by
-# argument substitution when the skill is invoked, silently corrupting this line.
-CID=$(grep -oE "Created conversation [0-9a-f-]{36}" "$LOG" | tail -1 | sed 's/.*conversation //')
-rm -f "$LOG"
+  --mode plan --model gemini-3.8-flash-high --output-format json --print-timeout 15m \
+  > c:/tmp/agy-r1.json 2> c:/tmp/agy-r1.err
 ```
 
-**Stop here.** These are two separate steps, not one script. Between them you must validate
-round 1 (exact sentinel, then stderr), report its findings, apply fixes to the artifact, and
-pass both convergence gates. Running the next block straight after the first would review an
-unvalidated result against an artifact you have not yet fixed.
+Read `conversation_id`, `status` and `response` out of that file:
 
 ```bash
-# Round 2, only after round 1 validated and its fixes landed
-if [ -n "$CID" ]; then
-  # repeat exactly the launch flags round 1 used, no more: if round 1 had --add-dir, repeat
-  # it verbatim; if it did not, adding one here silently widens access on resume.
-  # No --log-file here: round 1's ID is already in $CID, and re-passing it only truncates.
-  agy --print "<round 2 prompt, current artifact re-supplied and fenced, sentinel instruction>" \
-    --conversation "$CID" --mode plan --model gemini-3.8-flash-high --print-timeout 15m \
-    > c:/tmp/agy-review-r2.out 2> c:/tmp/agy-review-r2.err
-else
-  echo "no conversation ID captured; run this round stateless instead"
-fi
+python3 -c "import json;d=json.load(open(r'C:/tmp/agy-r1.json',encoding='utf-8'));print(d['conversation_id'],d['status']);print(d['response'][-80:])"
 ```
+
+**Stop here.** These are separate steps, not one script. Between them you must validate round 1
+(the sentinel, then stderr), report its findings, apply fixes to the artifact, and pass both
+convergence gates. Running the next block straight after the first would review an unvalidated
+result against an artifact you have not yet fixed.
+
+**Carry the ID across as a literal.** Each Bash call is its own process, so a shell variable set
+while capturing the ID is gone by the time you launch the next round. Read the id, then write it
+into the next command verbatim:
+
+```bash
+# Round 2, only after round 1 validated and its fixes landed. Repeat exactly the launch flags
+# round 1 used, no more: if round 1 had --add-dir, repeat it verbatim; if it did not, adding one
+# here silently widens access on resume.
+agy --print "<round 2 prompt, current artifact re-supplied and fenced, sentinel instruction>" \
+  --conversation 055a398f-db14-4c5f-abbb-1bf03f8120a7 \
+  --mode plan --model gemini-3.8-flash-high --output-format json --print-timeout 15m \
+  > c:/tmp/agy-r2.json 2> c:/tmp/agy-r2.err
+```
+
+Verified on agy 1.2.14: round 1 returned `status: SUCCESS` with a `conversation_id`, and
+resuming that id from a separate process recalled a number given in round 1.
 
 Rules:
 
-- The ID-capture step reads a log line format upstream may change. Check `$CID` is non-empty
-  before resuming, and fall back to a stateless round if it is empty.
+- **Under `--output-format json` the sentinel is the last line of `response`, not of stdout.**
+  Stdout is the JSON envelope. Check the token against `d['response']`.
+- `status` is a second signal, and it is not a substitute for the sentinel: every run measured
+  here returned `SUCCESS`, so there is no evidence of what it reports for a silently blocked
+  tool.
 - **An unknown ID does not fail the run.** `--conversation <id>` that matches nothing warns
   `conversation "<id>" not found` on **stderr**, then answers from an empty history and exits
   0. Stdout alone cannot tell that apart from a real resume, which is one more reason the
