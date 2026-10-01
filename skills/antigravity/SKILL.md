@@ -88,8 +88,7 @@ Follow all four steps every time. Step 3 is what stops a truncated run being rep
 **Prefer B whenever the material sits in a directory you can safely grant**, and let the
 reviewer open the tree itself. A reviewer reading a diff alone sees only the changed hunks,
 so it cannot judge the changed lines against the file around them or find the related
-problem two hundred lines away. On the same question, a reviewer that can open the tree reports
-problems in unchanged lines the diff never contained. A model handed a complete inlined
+problem two hundred lines away. A model handed a complete inlined
 artifact may also still reach for `read_file` and lose the whole run to an auto-denial.
 
 Two things pull the other way. The privacy check below is the gate on B, and a tree you
@@ -112,7 +111,7 @@ Three routes, best first:
   the files whose current state matters, and what the change was meant to do. Capture a
   commit's diff yourself and paste it in, since a shell command inside the run needs an
   approval headless cannot give. This is the default.
-- **Short artifact with no file:** inline it into the prompt via command substitution (Profile A). Measure
+- **Short artifact:** inline it into the prompt via command substitution (Profile A). Measure
   first (`wc -c`), and measure the assembled command: the mode clause, template and simplicity
   bar run to well over a thousand characters before the artifact starts. Windows caps a whole
   command line at 32,767 characters including the flags, so treat **30,000 characters for the
@@ -134,8 +133,7 @@ pasting it. A staged `.env`, a fixture with real credentials, or a customer reco
 file all reach the service silently otherwise.
 
 **Profile B.** `--add-dir` takes directories, and it hands everything beneath the one you grant to an
-external service, to read and to change: `.env` files, credentials, private datasets, and whatever any symlinks
-under it point at. Grant the smallest directory that does the job. Treat
+external service, to read and to change: `.env` files, credentials, and private datasets. Grant the smallest directory that does the job. Treat
 `read_file(<whole repo>)` as a broad grant that needs justification. If the tree holds
 secrets, do not fire.
 
@@ -157,8 +155,7 @@ project as Ask and shell commands likewise, and headless cannot prompt for eithe
 run can already reach through the project itself, pre-existing rules, the starting directory or a
 symlink is untested on 1.2.14. Grant on the assumption that the boundary is unproven.
 
-If a read is denied anyway, a `deny` rule is shadowing the path, since deny outranks
-everything. A denial does not say which rule produced it, so read the effective policy in
+If a read is denied anyway, the denial does not say which rule produced it. Read the effective policy in
 `~/.gemini/antigravity-cli/settings.json` against the path that was refused, then prefer moving
 the artifact somewhere unshadowed over broadening the rules.
 
@@ -172,8 +169,8 @@ the artifact somewhere unshadowed over broadening the rules.
 # default rather than only when you happen to notice the risk.
 N=$RANDOM
 
-# Profile A: material with no file to point at, inlined and fenced. A repo diff belongs in
-# Profile B instead; this is for a plan or spec that exists only in the conversation.
+# Profile A: the artifact inlined and fenced. A repo diff belongs in Profile B instead, so the
+# reviewer can judge the change against the file around it.
 # The unquoted heredoc expands $(cat ...) once; bash does not re-scan the result, so $vars,
 # backticks and quotes inside the artifact reach agy intact (verified byte-for-byte).
 agy --print "$(cat <<PROMPT
@@ -338,7 +335,7 @@ shape narrows the search; it does not prove why a run failed.
 | Symptom | First thing to check | Fix |
 |---------|----------------------|-----|
 | Empty stdout, exit 0, stderr names a **read** permission | A `deny` or `ask` rule is shadowing the path, or the file sits outside the workspace | Inspect the effective Deny/Ask policy, then either inline the content (Profile A) or move the artifact into an unshadowed directory you pass with `--add-dir`. Adding an `allow` rule does not help, since Deny outranks Allow |
-| Empty stdout, exit 0, stderr names `write_file`, `command`, or `unsandboxed` | The prompt asked the reviewer to change something | **Do not grant it.** A review never needs to write or shell out, so treat this as a prompt that asked for too much. Rewrite the prompt to ask for analysis instead |
+| Empty stdout, exit 0, stderr names `write_file`, `command`, or `unsandboxed` | An operation outside what a review needs was attempted; the refusal does not say whether the prompt asked for it | **Do not grant it.** A review never needs to write or shell out, so treat this as a prompt that asked for too much. Rewrite the prompt to ask for analysis instead |
 | Stdout has narration but no sentinel | Run stopped early. A blocked tool is one cause; timeout, dropped auth, or network failure look the same | Discard output. Read stderr to identify the cause, then re-run after inlining the content, relocating the artifact, or raising the timeout. Never unblock it by granting a write or command rule |
 | No sentinel, stderr empty | Output shape cannot select a unique cause: an unfenced artifact that swallowed the sentinel instruction, a silently blocked tool, a timeout and a dropped connection all look like this | Discard the result. Re-read the prompt for an unfenced artifact, read stderr, and verify independently any effect the output narrates. Re-run only after an evidenced correction |
 | "must be an absolute path" | A relative path reached `--add-dir` or a tool | Pass absolute paths; on Git Bash use `$(cygpath -w …)` |
