@@ -158,8 +158,9 @@ run can already reach through the project itself, pre-existing rules, the starti
 symlink is untested on 1.2.14. Grant on the assumption that the boundary is unproven.
 
 If a read is denied anyway, a `deny` rule is shadowing the path, since deny outranks
-everything. Check `~/.gemini/antigravity-cli/settings.json` and prefer moving the artifact
-somewhere unshadowed over broadening the rules.
+everything. A denial does not say which rule produced it, so read the effective policy in
+`~/.gemini/antigravity-cli/settings.json` against the path that was refused, then prefer moving
+the artifact somewhere unshadowed over broadening the rules.
 
 ## 2. Run
 
@@ -269,14 +270,9 @@ blocked, see Recover for the right remedy. It is never a `write_file`, `command`
   `<task-notification>` confirms the background task finished. An empty file before then means
   nothing.
 - Clean up output files after reading them.
-- **Passing output paths to subagents:** follow the `<temp>` rule and a subagent resolves
-  `c:/tmp/agy-<slug>.out` natively on Windows, with no conversion. On Linux/macOS the `/tmp/`
-  path works as-is. The problem case is a Windows `/tmp/…` output, which a subagent's isolated
-  tool environment cannot resolve. The fix is to have written it to `c:/tmp/` in the first
-  place; otherwise inline the content into the subagent prompt (up to roughly 50KB), or pass
-  `$(cygpath -w /tmp/…)`, which resolves a file genuinely written to Git Bash's `/tmp/` and so
-  lands on `%TEMP%`. Converting a `c:/tmp/` path is harmless: `cygpath -w c:/tmp/x` gives
-  `C:\tmp\x`.
+- **Passing output paths to subagents:** a subagent has the same blind spot as this session, so
+  the `<temp>` rule above covers it. For a `/tmp/…` output already produced, inline the content
+  into the subagent prompt (up to roughly 50KB) or pass `$(cygpath -w /tmp/…)`.
 
 ## 3. Validate
 
@@ -344,15 +340,14 @@ shape narrows the search; it does not prove why a run failed.
 | Empty stdout, exit 0, stderr names a **read** permission | A `deny` or `ask` rule is shadowing the path, or the file sits outside the workspace | Inspect the effective Deny/Ask policy, then either inline the content (Profile A) or move the artifact into an unshadowed directory you pass with `--add-dir`. Adding an `allow` rule does not help, since Deny outranks Allow |
 | Empty stdout, exit 0, stderr names `write_file`, `command`, or `unsandboxed` | The prompt asked the reviewer to change something | **Do not grant it.** A review never needs to write or shell out, so treat this as a prompt that asked for too much. Rewrite the prompt to ask for analysis instead |
 | Stdout has narration but no sentinel | Run stopped early. A blocked tool is one cause; timeout, dropped auth, or network failure look the same | Discard output. Read stderr to identify the cause, then re-run after inlining the content, relocating the artifact, or raising the timeout. Never unblock it by granting a write or command rule |
-| No sentinel, stderr empty, output answers the whole question and ends on a finished thought | Prompt construction: an unfenced artifact swallowed the sentinel instruction | Re-fence the artifact with the ARTIFACT markers and re-run. Do not go hunting for a permission denial |
-| No sentinel, stderr empty, output stops mid-task or narrates a step whose effect you cannot confirm | Early stop with no notice. A silently blocked tool is one observed cause; a timeout or dropped connection looks identical | Verify the intended effect independently, since narration is never evidence it happened. Then re-run, inlining the content or raising the timeout once you know which applied |
+| No sentinel, stderr empty | Output shape cannot select a unique cause: an unfenced artifact that swallowed the sentinel instruction, a silently blocked tool, a timeout and a dropped connection all look like this | Discard the result. Re-read the prompt for an unfenced artifact, read stderr, and verify independently any effect the output narrates. Re-run only after an evidenced correction |
 | "must be an absolute path" | A relative path reached `--add-dir` or a tool | Pass absolute paths; on Git Bash use `$(cygpath -w …)` |
 | "You are not logged into Antigravity" | Auth expired or absent | Log in to Antigravity again; the CLI reads a keyring-backed OAuth token |
 | Allow-rule added but still denied | Permissions merge across project settings, shared Antigravity settings, and CLI settings, with **Deny > Ask > Allow** | Inspect the *effective* policy and look for a higher-precedence Deny or Ask, rather than adding another Allow |
 | Empty stdout, **exit 2**, stderr opens `flags provided but not defined:` | A flag that does not exist on `agy`, usually carried over from another CLI wrapper | Check it against the flag list above. Usual culprits: `--output-file`, `-o`, `--approval-mode`, `-s`, `--allowed-mcp-server-names` |
 | Model rejected | Stale model ID | Run `agy models` and pick from the live list |
 | Answer ignores everything earlier rounds established | `--conversation` missed and started an empty history | Check stderr for `conversation "<id>" not found`, recapture the ID, and re-send what the round needs |
-| Empty stdout, exit 0, stderr names `read_file`, and the artifact was fully inlined | The model went looking for files it had already been given. No rule is shadowing anything, so the read rows above do not apply | Re-run under Profile B with the directory granted. Failing that, re-run under A telling it the artifact is complete and no tool call is needed |
+| Empty stdout, exit 0, stderr names `read_file`, and the artifact was fully inlined | The model went looking for files it had already been given. Inlining does not establish that no rule shadowed the path, so check the refused target against the effective policy before assuming either | Re-run under Profile B with the directory granted. Failing that, re-run under A telling it the artifact is complete and no tool call is needed |
 
 ### Permissions
 
@@ -681,10 +676,6 @@ Three rules, ordered by how often they are broken.
 Model verbs are calibrated. "I disagree" is weaker than "rejects". "Too narrow" is weaker than
 "misses an entire class". When compressing, quote the verb rather than reaching for a stronger
 synonym.
-
-- **Bad:** "Antigravity rejects the approach in 7 of 7 dimensions."
-- **Good:** It restructures 6 of 7 items and says *"I disagree with the belief that X is
-  highest-leverage"* on the 7th.
 
 ### 2. Do not add explanatory bridges absent from the source
 
