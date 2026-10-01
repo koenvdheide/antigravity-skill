@@ -389,16 +389,15 @@ Effort suffixes (`-high` / `-medium` / `-low`) vary by release, and not every mo
 three. A separate `--effort` flag also exists; prefer the suffix and do not assume the two
 compose.
 
-Set the suffix from the mode, the way the companion `codex` plugin sets reasoning effort:
+Set the suffix from the mode:
 
 | Suffix | Modes |
 | ------ | ----- |
 | `-medium` | Explain, and any prose pass (grammar, spelling, reading a draft) |
 | `-high` | Brainstorm, Red-team, Diff Review, Attack Surface, Exhausted Hypotheses |
 
-Gemini stops at `-high`, so there is no equivalent of the `xhigh` and `max` levels Codex offers.
-A review that wants one of those belongs with `codex` on Astra. The Pro line omits `-medium`
-entirely, which is one more reason the newest Flash is the default here.
+The Pro line omits `-medium` entirely, which is one more reason the newest Flash is the default
+here.
 
 **Flash is the right default for convergence mode.** A convergence loop pays the model cost
 once per round, and rounds are the point, so a fast cheap model that answers in a couple of
