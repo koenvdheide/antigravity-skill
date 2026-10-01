@@ -26,7 +26,8 @@ prints the response to stdout. Use it for an independent read on an artifact you
 > **Shell.** These recipes use `cygpath`, heredocs, and shell redirection, so on Windows they
 > assume Git Bash. Adapt paths and quoting if you run them from PowerShell.
 
-> **Version drift.** Print mode is undocumented upstream and its flags drift between
+> **Version drift.** Print mode is documented upstream, but the page lags the binary (it still
+> gives `--print-timeout` a `5m` default where agy 1.2.14 reports `0s`), and flags drift between
 > releases. When a table here disagrees with `agy --help`, the CLI wins. For models,
 > `agy models` wins.
 
@@ -101,7 +102,8 @@ the result.
 
 ### Get the content in
 
-**Stdin does not work.** `cat file | agy --print "..."` does not prepend the file the way
+**Plain piped stdin does not work.** (`--input-format stream-json` is the documented route for
+feeding prompts on stdin; this skill does not use it.) `cat file | agy --print "..."` does not prepend the file the way
 some CLIs do. In an observed run the model tried to shell out to read the content instead,
 and that tool call was denied.
 
@@ -132,19 +134,27 @@ contains. Look at it before interpolating it, the same way you would read a file
 pasting it. A staged `.env`, a fixture with real credentials, or a customer record in a test
 file all reach the service silently otherwise.
 
-**Profile B.** `--add-dir` takes directories, and it exposes everything beneath the one you grant to an
-external service: `.env` files, credentials, private datasets, and whatever any symlinks
+**Profile B.** `--add-dir` takes directories, and it hands everything beneath the one you grant to an
+external service, to read and to change: `.env` files, credentials, private datasets, and whatever any symlinks
 under it point at. Grant the smallest directory that does the job. Treat
 `read_file(<whole repo>)` as a broad grant that needs justification. If the tree holds
 secrets, do not fire.
 
 ### What `--add-dir` actually grants
 
-Workspace membership is enough to read. A probe with no `read_file` allow-rule configured at
-all read a file under `--add-dir` successfully, so Profile B needs no permission negotiation
-before it runs. Writes are separate and stay denied without an explicit rule, and anything
-outside the workspace is unreachable. This is precisely why the privacy check above is the
-real gate: the grant is the directory, and nothing narrower.
+Read **and write** inside the granted directory, with no rule and no prompt. Measured on agy
+1.2.14 under `--mode plan`: a run told to write created a new file and appended to an existing
+one, reported both, and stderr carried no denial. Google documents the same default, that
+"reading and writing files inside your active project directory is automatically allowed".
+
+So `--add-dir` is not a read grant. Treat it as handing the directory over: anything beneath it
+can be read by an external service and changed on disk. Grant the smallest directory that does
+the job, and prefer a throwaway copy over a working tree you care about whenever the artifact
+allows it. This is why the privacy check above is the real gate: the grant is the directory, and
+nothing narrower.
+
+Files outside the workspace default to Ask, which headless cannot prompt for, so they stay out
+of reach. Shell commands default to Ask the same way; that half is untested here.
 
 If a read is denied anyway, a `deny` rule is shadowing the path, since deny outranks
 everything. Check `~/.gemini/antigravity-cli/settings.json` and prefer moving the artifact
@@ -331,7 +341,7 @@ shape narrows the search; it does not prove why a run failed.
 | Symptom | First thing to check | Fix |
 |---------|----------------------|-----|
 | Empty stdout, exit 0, stderr names a **read** permission | A `deny` or `ask` rule is shadowing the path, or the file sits outside the workspace | Inspect the effective Deny/Ask policy, then either inline the content (Profile A) or move the artifact into an unshadowed directory you pass with `--add-dir`. Adding an `allow` rule does not help, since Deny outranks Allow |
-| Empty stdout, exit 0, stderr names `write_file`, `command`, or `unsandboxed` | The prompt asked the reviewer to change something | **Do not grant it.** This skill is read-only by contract; a review never needs to write or shell out. Rewrite the prompt to ask for analysis instead |
+| Empty stdout, exit 0, stderr names `write_file`, `command`, or `unsandboxed` | The prompt asked the reviewer to change something | **Do not grant it.** A review never needs to write or shell out, so treat this as a prompt that asked for too much. Rewrite the prompt to ask for analysis instead |
 | Stdout has narration but no sentinel | Run stopped early. A blocked tool is one cause; timeout, dropped auth, or network failure look the same | Discard output. Read stderr to identify the cause, then re-run after inlining the content, relocating the artifact, or raising the timeout. Never unblock it by granting a write or command rule |
 | No sentinel, stderr empty, output answers the whole question and ends on a finished thought | Prompt construction: an unfenced artifact swallowed the sentinel instruction | Re-fence the artifact with the ARTIFACT markers and re-run. Do not go hunting for a permission denial |
 | No sentinel, stderr empty, output stops mid-task or narrates a step whose effect you cannot confirm | Early stop with no notice. A silently blocked tool is one observed cause; a timeout or dropped connection looks identical | Verify the intended effect independently, since narration is never evidence it happened. Then re-run, inlining the content or raising the timeout once you know which applied |
@@ -342,10 +352,6 @@ shape narrows the search; it does not prove why a run failed.
 | Model rejected | Stale model ID | Run `agy models` and pick from the live list |
 | Answer ignores everything earlier rounds established | `--conversation` missed and started an empty history | Check stderr for `conversation "<id>" not found`, recapture the ID, and re-send what the round needs |
 | Empty stdout, exit 0, stderr names `read_file`, and the artifact was fully inlined | The model went looking for files it had already been given. No rule is shadowing anything, so the read rows above do not apply | Re-run under Profile B with the directory granted. Failing that, re-run under A telling it the artifact is complete and no tool call is needed |
-
-The two "no sentinel, stderr empty" rows are told apart by **whether the response actually
-answers the question asked**. A complete answer missing only its final marker points at the
-prompt; an answer that stops partway points at a blocked tool.
 
 ### Permissions
 
@@ -358,13 +364,13 @@ Config lives at `~/.gemini/antigravity-cli/settings.json`:
 Rule forms: `read_file(*)`, `write_file(/path)`, `read_url(domain)`, `execute_url(domain)`,
 `command(prefix)`, `unsandboxed(prefix)`, `mcp(server/tool)`. Precedence is **Deny > Ask >
 Allow**. Unconfigured operations default to Ask, which headless mode auto-denies, with one
-verified exception: reads of files inside the workspace are granted by `--add-dir` membership
+measured exception: reads **and writes** inside a directory granted with `--add-dir` are allowed
 without any rule. Never add a `write_file`, `command`, or `unsandboxed` rule to unblock this
 skill; needing one means the prompt asked for something a review should not do.
 
-Under `--mode plan` with default permissions, writes and shell commands are blocked. Treat
-that as an observation rather than a guarantee, and keep prompts read-only in intent. Propose
-a rule when one is needed; leave `settings.json` to the user.
+`--mode plan` does not make a run read-only: the write probe above ran under it. Keep prompts
+read-only in intent, and rely on which directory you grant rather than on the mode. Propose a
+rule when one is needed; leave `settings.json` to the user.
 
 ## Model selection
 

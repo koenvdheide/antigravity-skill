@@ -6,7 +6,7 @@ A [Claude Code](https://claude.ai/code) plugin that invokes the local [Antigravi
 
 Gives Claude Code a structured way to delegate analysis to Antigravity: brainstorming, red-teaming, diff review, or anything that benefits from a non-Claude perspective. `agy` runs Gemini models by default, and the skill pins an explicit model on every call.
 
-The skill runs `agy` headless (`--print`) in plan mode. Google documents [the permission model](https://antigravity.google/docs/cli/permissions) and leaves print mode undocumented, so the skill covers what headless operation actually does: how to get content in (stdin piping does not work), and how to tell a finished review from one that stopped early.
+The skill runs `agy` headless (`--print`) in plan mode. Google's docs lag the binary, so the skill covers what headless operation actually does: what a directory grant really allows, how to get content in (plain piped stdin does not work), and how to tell a finished review from one that stopped early.
 
 ## Architectural ownership
 
