@@ -648,8 +648,9 @@ artifact somewhere the user never asked for. Plausible is not correct: verify th
   stop signals ("did we need either?").
 
 What to do: re-state the original brief at every Gate 2 and ask whether the next round still
-serves it. Weight Simplifications at least as heavily as Breakage, since the default bias runs
-toward addition. If a round grows the artifact by more than half, stop and re-confirm scope.
+serves it, carrying the word count of whichever mechanism the rounds keep touching against its
+count at round 1, so growth inside a shrinking artifact stays visible. Weight Simplifications
+at least as heavily as Breakage, since the default bias runs toward addition. If a round grows the artifact by more than half, stop and re-confirm scope.
 Treat routine "yes-all" as a prompt to add friction and offer remove-this options alongside
 add-machinery ones.
 
