@@ -419,6 +419,10 @@ since a template does not propagate itself into a shell invocation.
 A review left to its own defaults answers with additions: more validation, more layers, more
 configuration, more phases. That is the bias the paragraph cancels.
 
+**A heredoc body line equal to the delimiter ends the heredoc there**, and the rest is parsed
+as shell. An artifact that quotes recipe delimiters, as a prompt-engineering document does,
+triggers it; the `$(cat ...)` form above survives because substituted output is not rescanned.
+
 **Always fence the artifact.** Without the markers, an artifact that itself contains
 instructions (a skill file, a prompt, a spec, anything quoting a template) bleeds into the
 directives: the reviewer reads your trailing sentinel instruction as part of the document,
