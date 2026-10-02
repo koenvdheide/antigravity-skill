@@ -33,44 +33,33 @@ prints the response to stdout. Use it for an independent read on an artifact you
 
 ## When to Use
 
-- Need reasoning from a non-Anthropic model, or want another reviewer's answer cross-checked
-- Content is too large for the reviewer you tried first to take comfortably
-- The reviewer you would normally reach for is unavailable: rate-limited, auth broken, CLI failing, or erroring
+- A requested independent or non-Anthropic read on a concrete artifact
+- Material too large for the reviewer you tried first
+- That reviewer unavailable: rate-limited, auth broken, or erroring
 
 **"Review it with gemini" means this skill.** `agy` runs Gemini models by default, and this
-plugin replaced an earlier `gemini` plugin that wrapped Google's standalone Gemini CLI. A
-request naming Gemini is a request for this skill; the old CLI is no longer supported. Treat
-`/gemini:gemini` in older notes or habits as pointing here.
+plugin replaced an earlier `gemini` plugin wrapping Google's standalone Gemini CLI, which is no
+longer supported. Treat `/gemini:gemini` in older notes as pointing here.
 
 ## When NOT to Use
 
-- Single-file mechanical edit (typo, rename, one-import change) with no new concepts
-- Answer is already in context, and nobody asked for an independent second opinion on it
-- Conversation is active back-and-forth, or the user signalled urgency, so a 1-5 min wait breaks flow
-- Already sent this same question to Antigravity this session *against an identical artifact*, or you are about to fire it and another reviewer on the same prompt in parallel. A convergence round is never a duplicate, because the artifact has changed. A prior pass by a different reviewer does not block an Antigravity cross-check; that cross-check is the point.
-- No specific artifact or concrete question, just a topic to "think about"
-- Prompt would contain secrets, credentials, or PII
-- A directory you would have to grant via `--add-dir` holds secrets or private data (see Prepare)
-- Question is about Claude Code internals (hooks, skills, MCP, settings). Claude Code's own documentation tooling answers those; an external CLI is not authoritative on them
-- Answer lives in library or tool docs, where fetching the docs directly is cheaper
-- Missing local facts. Reproduce the issue, inspect logs, run `rg`/`git`/`blame`, or ask the user first
-- Decision depends on product priority, compliance, or release timing you do not have. Ask the user, who owns it
-- Nobody asked for an independent cross-check and the question does not need a non-Anthropic
-  read. An explicit request for a second opinion outranks this bullet
+- A mechanical single-file edit, or an answer already in context with no second opinion asked for
+- An active back-and-forth or stated urgency, where a 1-5 min wait breaks the flow
+- The same question against an unchanged artifact, or another reviewer about to get the same
+  prompt in parallel. A convergence round is never a duplicate, because the artifact changed, and
+  a prior pass by a different model is exactly what a cross-check is for
+- No concrete artifact or question
+- A prompt that would contain secrets, credentials, or PII
+- A directory you would have to grant that holds secrets or private data
+- Claude Code internals, or an answer that lives in library or tool docs
+- Missing local facts: reproduce, read the logs, run `rg`/`git`/`blame`, or ask first
+- Product priority, compliance, or release timing you do not own — ask the user
 
 ## Precedence
 
-Every When NOT to Use bullet is one of two kinds, and the kind decides what happens when a
-When to Use bullet matches at the same time.
-
-- **Hard bullets never yield.** Exactly two: a prompt that would contain secrets, credentials
-  or PII, and a directory holding private data. If either matches, do not fire, whatever else
-  is true and whatever the user asks for.
-- **Every other bullet is overridable.** They stop you by default, and an explicit user
-  request for this review lifts them. Classifying by rule rather than by a second list keeps
-  the two sections from drifting apart.
-- **When unsure which applies, ask** ("I'd skip Antigravity here because X; proceed anyway?")
-  rather than deciding silently.
+An explicit request for this review lifts these defaults. It never lifts the privacy ones: a
+prompt carrying secrets, or a grant over private data, does not go, whatever is asked. When
+unsure which applies, ask rather than deciding silently.
 
 # Prepare → Run → Validate → Recover
 
@@ -80,99 +69,68 @@ Follow all four steps every time. Step 3 is what stops a truncated run being rep
 
 ### Choose an execution profile
 
-| Profile | Use for | Flags |
-|---------|---------|-------|
-| **B. Workspace-reading** (default when the material is on disk) | Anything that lives in a repo or directory: diff review, explain, attack surface, exhausted hypotheses, red-team of committed code | `--mode plan --add-dir <smallest dir>` |
-| **A. Inlined** | You supply the content in the prompt, whether or not it also exists as a file | `--mode plan` and no `--add-dir` |
+**B. Workspace-reading** — `--mode plan --add-dir <smallest safe directory>` — for material on
+disk, and the default when the tree is safe to grant. The reviewer opens the files itself, so it
+can judge a change against the code around it and find the related problem two hundred lines
+away. It reads a *moving* tree, so finish your edits before launching.
 
-**Prefer B whenever the material sits in a directory you can safely grant**, and let the
-reviewer open the tree itself. A reviewer reading a diff alone sees only the changed hunks,
-so it cannot judge the changed lines against the file around them or find the related
-problem two hundred lines away. A model handed a complete inlined
-artifact may also still reach for `read_file` and lose the whole run to an auto-denial.
+**A. Inlined** — `--mode plan` with no `--add-dir` — when you supply the content in the prompt,
+or when no directory is safe to grant. The artifact is frozen at send time.
 
-Two things pull the other way. The privacy check below is the gate on B, and a tree you
-cannot grant sends you to A whatever the artifact is. B also reads a *moving* tree: edit
-files while a review runs and its findings describe a version that no longer exists, where an
-inlined artifact is frozen at send time. Finish your edits before firing, or expect to date
-the result.
+The privacy check below is the gate on B.
 
 ### Reviewing outside a git repository
 
-`agy` has no repository gate. `--add-dir` takes any absolute directory, and a directory that is
-not a repo works the same as one that is, so a spec in a scratch directory or a downloaded file
-needs no extra flag.
-
-That makes Profile B the easy route for a loose directory of files. For a diff with no repo to
-read it from, inline the content under Profile A and fence it.
+`agy` has no repository gate: `--add-dir` takes any absolute directory, and a directory that is
+not a repo behaves the same as one that is. For a diff with no repo behind it, inline it under A.
 
 ### Get the content in
 
-**Plain piped stdin does not work.** (`--input-format stream-json` is the documented route for
-feeding prompts on stdin; this skill does not use it.) `cat file | agy --print "..."` does not prepend the file the way
-some CLIs do. A model left without the content may try to shell out to read it instead, and
-headless cannot approve that call.
+**Plain piped stdin does not work.** `cat file | agy --print "..."` does not prepend the file.
+(`--input-format stream-json` is the documented route for feeding prompts on stdin; this skill
+does not use it.) A model left without the content may try to shell out to read it, and headless
+cannot approve that call.
 
-Three routes, best first:
+Under B, name the paths whose current state matters and what the change was meant to do, and
+capture a commit's diff yourself rather than relying on the run to shell out for it.
 
-- **Already on disk:** grant its smallest containing directory with `--add-dir` and name the
-  paths in the prompt (Profile B). A repo, a worktree, a directory of logs. Say what to read:
-  the files whose current state matters, and what the change was meant to do. Capture a
-  commit's diff yourself and paste it in, rather than relying on the run to shell out for it.
-  This is the default.
-- **Short artifact:** inline it into the prompt via command substitution (Profile A). Measure
-  first (`wc -c`), and measure the assembled command: the mode clause, template and simplicity
-  bar run to well over a thousand characters before the artifact starts. Windows caps a whole
-  command line at 32,767 characters including the flags, so treat **30,000 characters for the
-  whole command** as the practical ceiling and go to Profile B above it. Trimming to the smallest useful
-  artifact can bring it back under the line, though a whole changed file is normally several
-  times its own diff, so trimming means fewer hunks rather than more file.
-- **Large artifact with no file:** what will not fit gets written to one. Grant its smallest
-  containing directory and tell `agy` the absolute path (Profile B). Delete the file once the
-  work is finished. In a convergence loop that means after the final round, since later rounds
-  re-read the same path.
+Under A, measure the whole assembled command, not just the artifact: Windows caps a command line
+at 32,767 characters including the flags. What will not fit gets written to a file, granted under
+B after the privacy check, and deleted once the work is finished — after the final round, since
+later rounds re-read the same path.
 
 ### Privacy check before sending anything
 
-The privacy rule is absolute, so it has to be checked against the payload you actually send.
+The privacy rule is absolute, so check it against the payload you actually send.
 
-**Profile A.** A command substitution like `$(git diff --staged)` ships whatever the diff
-contains. Look at it before interpolating it, the same way you would read a file before
-pasting it. A staged `.env`, a fixture with real credentials, or a customer record in a test
-file all reach the service silently otherwise.
+**Profile A.** A substitution like `$(git diff --staged)` ships whatever the diff contains. Read
+it before interpolating it: a staged `.env`, a fixture with real credentials, or a customer
+record in a test file all reach the service silently otherwise.
 
-**Profile B.** `--add-dir` takes directories, and it hands everything beneath the one you grant to an
-external service, to read and to change: `.env` files, credentials, and private datasets. Grant the smallest directory that does the job. Treat
-`read_file(<whole repo>)` as a broad grant that needs justification. If the tree holds
-secrets, do not fire.
+**Profile B.** Inspect the whole granted tree. Do not grant a directory holding secrets or
+private data, and note that naming one file in the prompt does not narrow the grant.
 
 ### What `--add-dir` actually grants
 
-Read **and write** inside the granted directory, with no rule and no prompt. Measured on agy
-1.2.14 under `--mode plan`, a run instructed to write creates and modifies files inside the
-granted directory, with no denial on stderr. Google documents the same default, that
+`--add-dir` grants read **and write** inside the directory, with no rule and no prompt. Measured
+on agy 1.2.14 under `--mode plan`, a run instructed to write created and modified files inside
+the granted directory with no denial on stderr. Google documents the same default, that
 "reading and writing files inside your active project directory is automatically allowed".
 
-So `--add-dir` is not a read grant. Treat it as handing the directory over: anything beneath it
-can be read by an external service and changed on disk. Grant the smallest directory that does
-the job, and prefer a throwaway copy over a working tree you care about whenever the artifact
-allows it. This is why the privacy check above is the real gate: the grant is the directory, and
-nothing narrower.
+So treat it as handing the directory over: anything beneath it can be read by an external service
+and changed on disk. Grant the smallest directory that does the job, and prefer a disposable copy
+over a working tree you care about.
 
 Neither profile has a verified isolation boundary. Google documents files outside the active
-project as Ask and shell commands likewise, and headless cannot prompt for either, but what the
-run can already reach through the project itself, pre-existing rules, the starting directory or a
-symlink is untested on 1.2.14. Grant on the assumption that the boundary is unproven.
-
-If a read is denied anyway, the denial does not say which rule produced it. Read the effective policy in
-`~/.gemini/antigravity-cli/settings.json` against the path that was refused, then prefer moving
-the artifact somewhere unshadowed over broadening the rules.
+project as Ask and shell commands likewise, and headless cannot prompt for either, but what a run
+can reach through the project itself, pre-existing rules, the starting directory or a symlink is
+untested on 1.2.14. Grant on the assumption that the boundary is unproven.
 
 ## 2. Run
 
 ```bash
 # Paths below are the Windows form (cygpath, c:/tmp). On Linux/macOS drop cygpath and
-# use /tmp. See the <temp> convention in Execution rules for why c:/tmp matters here.
+# use /tmp. On Windows c:/tmp makes the shell write and Claude's Read land in one place.
 
 # One nonce per run. A reviewed diff can itself contain the bare markers, so nonce by
 # default rather than only when you happen to notice the risk.
@@ -255,68 +213,47 @@ blocked, see Recover for the right remedy. It is never a `write_file`, `command`
 ### Execution rules
 
 - Run with `run_in_background: true` so the user is not blocked.
-- **Capture stdout and stderr to separate files.** Never use `2>/dev/null`. When a tool is
-  denied, stderr often carries the only notice, and discarding it turns a blocked run into a
-  silent empty answer. Stderr is also sometimes empty on a blocked run, which is why the
-  sentinel below is the decisive check.
-- **Output path, the `<temp>` convention.** Write redirect targets to `<temp>/agy-<slug>.out`,
-  where `<temp>` is **`c:/tmp`** on Windows (create once with `mkdir -p c:/tmp`) and **`/tmp`**
-  on Linux/macOS. Do not use `/tmp/…` on Windows: Git Bash resolves it to `%TEMP%` and the
-  write succeeds, but Claude's Read tool takes the literal path and fails with
-  `File does not exist` when you read the output back. `c:/tmp/…` makes the shell write and
-  the Read land in the same place. The examples above use the Windows `c:/tmp/` form; use
-  `/tmp/` on Linux/macOS.
-- Use descriptive, unique slugs (`<temp>/agy-redteam-auth.out`). On re-launch, use a
-  *different* slug; two runs sharing an output path collide.
-- **Wait for completion.** Never read or delete an output file before the
-  `<task-notification>` confirms the background task finished. An empty file before then means
-  nothing.
-- Clean up output files after reading them.
-- **Passing output paths to subagents:** a subagent has the same blind spot as this session, so
-  the `<temp>` rule above covers it. For a `/tmp/…` output already produced, inline the content
-  into the subagent prompt (up to roughly 50KB) or pass `$(cygpath -w /tmp/…)`.
+- **Capture stdout and stderr to separate files.** Never use `2>/dev/null`: when a tool is
+  denied, stderr often carries the only notice.
+- **Use one absolute native path per run for writing, reading and handoffs.** On Windows, Git
+  Bash resolves `/tmp` to `%TEMP%` and the write succeeds, while Claude's Read tool takes
+  `/tmp/…` literally and reports `File does not exist`; `c:/tmp/…` makes both land in the same
+  place. Convert an already-produced Bash path with `cygpath -w`.
+- Give each run a unique descriptive filename; shared output paths collide.
+- **Wait for the `<task-notification>`** before reading or deleting output. An empty file while
+  the run is going proves nothing.
+- Delete output files after reading them.
 
 ## 3. Validate
 
 Three checks, in order. A run failing any of them is unusable, whatever the exit code says.
+**Exit code 0 means nothing here**: a blocked run exits 0.
 
-**Exit code 0 means nothing here.** A blocked run exits 0.
-
-### The completion contract
-
-Append this to every prompt you send, with your per-run nonce in place of `$N`:
+**The completion contract.** Append this to every prompt, with your per-run nonce for `$N`:
 
 > As the very last line of your response, output exactly: `<<<AGY_COMPLETE:$N>>>`
 
-Then check that the last line of stdout is **exactly** the token you sent,
-`<<<AGY_COMPLETE:$N>>>`, matched as a whole line rather than as a substring. A substring test
-accepts a last line like `Failed to emit <<<AGY_COMPLETE:123>>>`, which means the opposite of
-what it appears to. `tail -1 out | tr -d '\r' | grep -Fxq "<<<AGY_COMPLETE:$N>>>"` does both
-jobs, stripping a trailing CR on Windows.
+Then match the final line of output exactly, as a whole line rather than a substring, stripping
+a trailing CR on Windows:
+
+```bash
+tail -1 out | tr -d '\r' | grep -Fxq "<<<AGY_COMPLETE:$N>>>"
+```
+
+A substring test would accept a last line like `Failed to emit <<<AGY_COMPLETE:123>>>`, which
+means the opposite of what it appears to. Under `--output-format json` the sentinel is the last
+line of `response`, not of stdout.
 
 **No sentinel means the result is unusable.** Never summarise it, quote it as a finding, or
-report anything from it as though the review finished. You may still read it to work out
-*which* failure you are looking at (see Recover), and that diagnostic read is the only
-permitted use before you discard it.
+report anything from it as though the review finished. Reading it to work out *which* failure you
+are looking at is the only permitted use. A missing sentinel does not establish a cause: a
+blocked tool, a timeout, dropped auth, a network failure and a model that ignored the instruction
+all produce it. One false positive to rule out first: an artifact pasted without the ARTIFACT
+markers can swallow the sentinel instruction, so check your own prompt before assuming
+truncation. Plausible stdout, empty stderr and exit 0 can all occur on a truncated run.
 
-The missing sentinel tells you the result cannot be trusted; it does not tell you why. A
-blocked tool, a timeout, dropped auth, a network failure, or a model that simply ignored the
-instruction all produce it. Read stderr, verify independently anything the run claimed to do,
-and re-run. Do not assign a cause the evidence does not support.
-
-**One false positive to rule out first.** If stderr is empty and the response reads as a
-complete answer, check your own prompt before assuming truncation: an artifact pasted without
-the ARTIFACT markers can swallow the sentinel instruction, so the reviewer never treats it as
-a directive. Fix the prompt and re-run rather than chasing a permission that was never denied.
-
-A truncated run is otherwise indistinguishable from a complete one: a run that stops early
-can still emit plausible stdout, empty stderr, and exit 0. The sentinel is the only signal
-that separates them.
-
-### Read stderr every run
-
-Stderr is diagnostic when populated, and it can be empty even on a blocked run, so treat it as a source of detail rather than the denial oracle.
-When a denial is reported, the notice names the tool:
+**Read stderr every run.** It is diagnostic when populated and can be empty even on a blocked
+run, so treat it as detail rather than the denial oracle. A denial names the tool:
 
 ```
 jetski: no output produced — a tool required the "write_file" permission that headless mode
@@ -324,29 +261,28 @@ cannot prompt for, so it was auto-denied. Add an allow-rule under permissions.al
 settings.json ...
 ```
 
-A denial invalidates any conclusion that depended on that operation, even when stdout has content.
+Reject any conclusion that depended on a denied operation, even when stdout has content.
 
-### Narration is intent, not evidence
-
-Print-mode stdout interleaves the agent's step narration ("I will read X", "I will overwrite
-Y") with its final answer. A narrated step may never have run. Treat narration as a claim
-about what the model meant to do, and quote only the final answer as a finding.
+**Narration is intent, not evidence.** Print-mode stdout interleaves the agent's step narration
+("I will read X", "I will overwrite Y") with its final answer, and a narrated step may never have
+run. Verify claimed effects, and quote only the final answer as a finding.
 
 ## 4. Recover
 
-Treat the middle column as the first thing to check rather than an established cause. Output
-shape narrows the search; it does not prove why a run failed.
+A denial does not name the rule that produced it. Inspect the refused path against the effective
+policy, then either inline the artifact or move it into an unshadowed directory you grant with
+`--add-dir`. Adding an `allow` rule does not help, since Deny outranks Allow. A fully inlined
+artifact can still trigger `read_file`, so retry under B where that is safe, or tell A the
+artifact is complete and needs no tool call.
 
-| Symptom | First thing to check | Fix |
-|---------|----------------------|-----|
-| Empty stdout, exit 0, stderr names a **read** permission | A `deny` or `ask` rule is shadowing the path, or the file sits outside the workspace | Inspect the effective Deny/Ask policy, then either inline the content (Profile A) or move the artifact into an unshadowed directory you pass with `--add-dir`. Adding an `allow` rule does not help, since Deny outranks Allow |
-| Empty stdout, exit 0, stderr names `write_file`, `command`, or `unsandboxed` | An operation outside what a review needs was attempted; the refusal does not say whether the prompt asked for it | **Do not grant it.** A review never needs to write or shell out. Narrow the prompt to analysis, and check what the run actually attempted before assuming the prompt caused it |
-| Stdout has narration but no sentinel | Run stopped early. A blocked tool is one cause; timeout, dropped auth, or network failure look the same | Discard output. Read stderr to identify the cause, then re-run after inlining the content, relocating the artifact, or raising the timeout. Never unblock it by granting a write or command rule |
-| No sentinel, stderr empty | Output shape cannot select a unique cause: an unfenced artifact that swallowed the sentinel instruction, a silently blocked tool, a timeout and a dropped connection all look like this | Discard the result. Re-read the prompt for an unfenced artifact, read stderr, and verify independently any effect the output narrates. Re-run only after an evidenced correction |
-| "You are not logged into Antigravity" | Auth expired or absent | Log in to Antigravity again; the CLI reads a keyring-backed OAuth token |
-| Allow-rule added but still denied | Permissions merge across project settings, shared Antigravity settings, and CLI settings, with **Deny > Ask > Allow** | Inspect the *effective* policy and look for a higher-precedence Deny or Ask, rather than adding another Allow |
-| Empty stdout, **exit 2**, stderr opens `flags provided but not defined:` | A flag that does not exist on `agy`, usually carried over from another CLI wrapper | Check it against the flag list above. Usual culprits: `--output-file`, `-o`, `--approval-mode`, `-s`, `--allowed-mcp-server-names` |
-| Empty stdout, exit 0, stderr names `read_file`, and the artifact was fully inlined | The model went looking for files it had already been given. Inlining does not establish that no rule shadowed the path, so check the refused target against the effective policy before assuming either | Re-run under Profile B with the directory granted. Failing that, re-run under A telling it the artifact is complete and no tool call is needed |
+For a denied `write_file`, `command` or `unsandboxed`, **do not grant it**: a review never needs
+to write or shell out. Check what the run actually attempted, then narrow the prompt to analysis.
+
+`"You are not logged into Antigravity"` means the keyring-backed OAuth token is gone; log in
+again.
+
+Everything else routes through Validate above: a missing sentinel permits diagnosis only, and it
+does not establish a cause.
 
 ### Permissions
 
@@ -370,117 +306,62 @@ rule when one is needed; leave `settings.json` to the user.
 
 ## Model selection
 
-Run `agy models` for the live list. Pin a model explicitly on every invocation.
+Run `agy models` for the live list and pin an exact ID on every invocation.
 
-Default to a **Gemini** model and take the exact ID from `agy models`. Absent a reason to do
-otherwise, pick the highest-numbered release on offer, at the effort suffix the table below
-gives for the task.
+Default to the newest **Gemini** release on offer. Do not read Pro as the deep tier and Flash as
+the fast one: the list shows Flash well ahead of Pro by version number, and Google has been
+shipping its strongest coding and agentic capability in the Flash releases. Check the model's own
+card when the choice matters.
 
-Do not read Pro as the deep tier and Flash as the fast one. Google has been shipping its
-strongest coding and agentic capability in the Flash releases, and the Pro line trails them in
-version number, so the newest Flash is usually the better reviewer for this skill's work.
-Check the model's own card when the choice matters.
+Set the effort suffix from the mode: `-medium` for Explain and any prose pass, `-high` for
+Brainstorm, Red-team, Diff Review, Attack Surface and Exhausted Hypotheses. Suffixes vary by
+release and the Pro line omits `-medium` entirely. Prefer the suffix to the separate `--effort`
+flag, and do not assume the two compose.
 
-Effort suffixes (`-high` / `-medium` / `-low`) vary by release, and not every model carries all
-three. A separate `--effort` flag also exists; prefer the suffix and do not assume the two
-compose.
-
-Set the suffix from the mode:
-
-| Suffix | Modes |
-| ------ | ----- |
-| `-medium` | Explain, and any prose pass (grammar, spelling, reading a draft) |
-| `-high` | Brainstorm, Red-team, Diff Review, Attack Surface, Exhausted Hypotheses |
-
-The Pro line omits `-medium` entirely, which is one more reason the newest Flash is the default
-here.
-
-**Flash is the right default for convergence mode.** A convergence loop pays the model cost
-once per round, and rounds are the point, so a fast cheap model that answers in a couple of
-minutes beats a slower one that makes each round a wait. Flash is both, which is why the loop
-below assumes it. Save a heavier model for a single deep pass on a finished artifact.
+Flash is also the right default for a convergence loop, which pays the model cost once per round
+and wants rounds rather than waits.
 
 **`agy` also serves `claude-*` models.** Selecting one gives up the cross-family read that is
-the usual reason to call this skill. Warn the user before launching with a `claude-*` model,
-then go ahead if that is what they want: this is a warning rather than a block, so the escape
-hatch survives a Gemini outage. Label such a result as same-family in your summary.
-
-**Name the exact model in every summary you present.** The user cannot otherwise tell whether
-they got an independent review.
-
-If one model is rate-limited, try another from `agy models` and report the switch.
+the usual reason to call this skill, so warn the user first, then go ahead if that is what they
+want, and label the result as same-family. **Name the exact model in every summary you present**,
+or the user cannot tell whether they got an independent review. If one model is rate-limited, try
+another from `agy models` and report the switch.
 
 ## Sessions
 
-Session resume works and is the backbone of convergence mode.
+Pin a conversation ID for anything multi-round. `-c` / `--continue` resumes the *most recent*
+conversation, so two runs at once can pick up each other's context; keep it for a quick one-off.
 
-`-c` / `--continue` resumes the *most recent* conversation, so two runs going at once can pick
-up each other's context. Use it only for a quick one-off. For anything multi-round, pin the ID.
-
-Ask for JSON and the ID comes back in the envelope. Google documents `conversation_id` as the
-"ID of the conversation, for resuming later", and `status` alongside it:
+Ask for JSON and the ID comes back in the envelope, which Google documents as
+`conversation_id`, "ID of the conversation, for resuming later", alongside `status`:
 
 ```bash
-agy --print "<round 1 prompt, ending with the sentinel instruction>" \
+agy --print "<prompt, ending with the sentinel instruction>" \
   --mode plan --model gemini-3.8-flash-high --output-format json --print-timeout 15m \
   > c:/tmp/agy-r1.json 2> c:/tmp/agy-r1.err
 ```
 
-Read `conversation_id`, `status` and `response` out of that file:
+Read `conversation_id`, `status` and `response` out of that file, then resume by adding
+`--conversation <id>` and repeating the same launch flags. On agy 1.2.14 an ID from one round
+resumes from a separate process, carrying the earlier context with it.
 
-```bash
-python3 -c "import json;d=json.load(open(r'C:/tmp/agy-r1.json',encoding='utf-8'));print(d['conversation_id'],d['status']);print(d['response'][-80:])"
-```
-
-**Stop here.** These are separate steps, not one script. Between them you must validate round 1
-(the sentinel, then stderr), report its findings, apply fixes to the artifact, and pass both
-convergence gates. Running the next block straight after the first would review an unvalidated
-result against an artifact you have not yet fixed.
-
-**Carry the ID across as a literal.** Each Bash call is its own process, so a shell variable set
-while capturing the ID is gone by the time you launch the next round. Read the id, then write it
-into the next command verbatim:
-
-```bash
-# Round 2, only after round 1 validated and its fixes landed. Repeat exactly the launch flags
-# round 1 used, no more: if round 1 had --add-dir, repeat it verbatim; if it did not, adding one
-# here silently widens access on resume.
-agy --print "<round 2 prompt, current artifact re-supplied and fenced, sentinel instruction>" \
-  --conversation 055a398f-db14-4c5f-abbb-1bf03f8120a7 \
-  --mode plan --model gemini-3.8-flash-high --output-format json --print-timeout 15m \
-  > c:/tmp/agy-r2.json 2> c:/tmp/agy-r2.err
-```
-
-On agy 1.2.14 a `conversation_id` from one round resumes from a separate process, carrying the
-earlier context with it.
-
-Rules:
-
-- **Under `--output-format json` the sentinel is the last line of `response`, not of stdout.**
-  Stdout is the JSON envelope. Check the token against `d['response']`.
-- **Require `status == "SUCCESS"` as well as the sentinel.** Route anything else through
-  Recover. A run that fails after starting a turn reports it in the envelope: a 429 quota refusal
-  returns `status: ERROR`, an `error` field and an empty `response`, with `AGY_ERROR: {...}` on
-  stderr carrying `error_code` and `retryable`. A run rejected before that, such as an unknown
-  flag, produces no envelope at all: exit 2 and plain stderr, as the Recover table shows. So a
-  missing or unparsable JSON envelope is itself a failure, not a reason to look for `status`.
-- `status` does not replace the sentinel. Whether it catches a run that stops partway while
-  still reporting `SUCCESS` is unverified, and that is the case the sentinel exists to catch.
-- **An unknown ID does not fail the run.** `--conversation <id>` that matches nothing warns
-  `conversation "<id>" not found` on **stderr**, then answers from an empty history and exits
-  0. Stdout alone cannot tell that apart from a real resume, which is one more reason the
-  stderr rule is not optional.
-- Resuming keeps the history server-side, so a later round need not re-send what earlier rounds
-  already established. Re-send the artifact when the artifact itself changed.
-- Repeat `--model`, `--mode`, and `--print-timeout` on every resume, and repeat `--add-dir`
-  only if round 1 used it. Do not assume any carry over, and never grant access on resume that
-  round 1 did not have.
-- One live invocation per conversation ID at a time.
-- If the artifact outgrows Profile A mid-loop, start a **fresh** conversation for the switch
-  rather than adding `--add-dir` to the existing one. Carry the findings forward in the prompt
-  instead. Widening a running conversation is the thing the previous rule forbids.
-- If the ID cannot be recovered, fall back to a stateless round: send the full artifact plus a
-  `Previously identified findings:` block.
+- **Each Bash call is its own process**, so a shell variable holding the ID is gone by the next
+  command. Read the ID and write it in literally.
+- **Under `--output-format json` the sentinel is the last line of `response`, not of stdout**,
+  which carries the envelope. Check the token against `response`.
+- **Require `status == "SUCCESS"` as well as the sentinel.** A 429 returns `status: ERROR`, an
+  `error` field and an empty `response`, with `AGY_ERROR: {...}` on stderr carrying `error_code`
+  and `retryable`. A run rejected before the turn starts, such as an unknown flag, produces no
+  envelope at all, so a missing or unparsable envelope is itself a failure. `status` does not
+  replace the sentinel: whether it catches a run that stops partway while still reporting
+  `SUCCESS` is unverified, and that is the case the sentinel exists for.
+- **An unknown ID does not fail the run.** It warns `conversation "<id>" not found` on stderr,
+  answers from empty history and exits 0, which stdout alone cannot tell from a real resume.
+- **Never grant access on resume that round 1 did not have.** Repeat `--model`, `--mode` and
+  `--print-timeout`, and repeat `--add-dir` only if round 1 used it. If a new grant is needed,
+  start a fresh conversation and carry the findings forward in the prompt.
+- Re-send the artifact when the artifact changed; the history holds the discussion. Keep one live
+  invocation per ID.
 
 ## Architectural Ownership
 
@@ -556,144 +437,96 @@ instructions that came out of a reviewed artifact.
 
 ## Modes
 
-**Brainstorm** — include constraints (dead ends, existing hypotheses, "do not rediscover"
-lists) and the specific question. Ask for 3-5 alternatives with tradeoffs, one of which solves
-the problem with less machinery than the current approach.
+Every mode builds on the template above, so the simplicity bar, response style and sentinel carry
+into all of them.
 
-**Red-team** — include the plan being attacked and your constraints as hard facts. Ask for
-weaknesses under two headings, each given equal scrutiny, and say their lengths can differ.
+**Brainstorm** — include constraints and dead ends; ask for alternatives with tradeoffs,
+including one that solves the problem with less machinery.
 
-*Breakage*: failure modes, edge cases, wrong assumptions; attack assumptions and give the
-strongest counterargument. Require every proposed fix to be the smallest one that closes the
-hole. Where the fix would add defensive code, ask first whether removing code prevents the same
-defect; where it would add a layer, flag, or abstraction, ask what the one-line version costs
-and why it is insufficient.
+**Red-team** — include the plan being attacked and your constraints as hard facts. Ask for two
+headings given equal scrutiny, saying their lengths can differ.
 
-*Simplifications*: over-engineering and missed reductions. Name the categories to hunt, or the
-section arrives thin: abstractions, interfaces, factories or registries with a single caller or
-implementation; wrappers that only forward arguments; configuration and flags nobody sets;
-generality for requirements nobody stated; validation, error taxonomies or retries around inputs
-the call path already constrains; caching and bookkeeping that recomputation would replace;
-scaffolding, docs restating the code, tests asserting mocks. For each: what to cut, why that is
-safe, expected impact, biggest cut first. A design that is sound but heavier than its problem is
-itself the verdict, even when Breakage is empty. Ask for the words "nothing to cut" when it finds
-nothing, so a short section reads as a judgement.
+*Breakage*: failure modes, edge cases, wrong assumptions. Attack assumptions and give the
+strongest counterargument. Require the smallest fix that closes the hole, and where a fix would
+add defensive code, ask first whether removing code prevents the same defect.
 
-Tell it not to strip defensive code at system boundaries or WHY comments. Add: "Do not agree
-just to be agreeable. Do not pad either heading to look balanced."
+*Simplifications*: name the categories to hunt, or the section arrives thin — single-caller
+abstractions, wrappers that only forward arguments, configuration nobody sets, generality for
+unstated requirements, validation the call path already constrains, bookkeeping recomputation
+would replace, and scaffolding. For each: what to cut, why that is safe, biggest first. A design
+that is sound but heavier than its problem is itself the verdict. Tell it not to strip
+system-boundary defences or WHY comments, and add: "Do not agree just to be agreeable. Do not pad
+either heading to look balanced."
 
 **Diff Review** — Profile B against the repo, naming the commit and the files whose current
-state matters, so the change is judged against the file as it now stands. Fall back to A with
-the diff inlined only when the tree cannot be granted. Ask it to verify each claim,
-flag assumptions stated as facts, check for stale line numbers, and flag machinery the diff adds
-that its stated goal does not require.
+state matters. Fall back to A with the diff inlined when the tree cannot be granted. Ask it to
+verify each claim, flag assumptions stated as facts, check stale line numbers, and flag machinery
+the stated goal does not require.
 
-**Explain** — Profile A with the file inlined where you know which file matters, otherwise
-Profile B.
+**Explain** — Profile A with the file inlined where you know which file matters, otherwise B.
 
-**Attack Surface** — Profile B. Include the dead-end list and known patterns as constraints.
-Ask for overlooked vectors, underexplored entry points, and non-obvious vulnerability classes.
+**Attack Surface** — Profile B with known patterns and dead ends as constraints. Ask for
+overlooked vectors, entry points and non-obvious vulnerability classes.
 
-**Exhausted Hypotheses** — Profile B. Include full pipeline state (scope, dead ends, coverage,
-existing hypotheses). Ask for 5-10 novel hypotheses absent from the dead-end list, each with
-exact `file:line` references and an attack scenario.
+**Exhausted Hypotheses** — Profile B with the full pipeline state. Ask for hypotheses absent
+from the dead-end list, each with exact `file:line` references and an attack scenario.
 
 ## Convergence Mode (iterative review)
 
-Some reviews converge rather than conclude. When an artifact will go through several
-revisions, run a loop: review → fix → re-review, until the verdict is affirmative, the user
-stops, or scope drift shows up.
+When an artifact will go through several revisions, run a loop: review → validate → resolve
+findings → re-review. Validate before reading anything into a round: a round without its
+sentinel is discarded and re-run, never summarised.
 
-### Loop shape
+Report each round's findings and ask which to apply, unless the user has already asked you to
+iterate to convergence; then apply clear wins and keep going, still pausing for anything that
+changes scope or behaviour. Resume the pinned conversation ID each round, and **supply the exact
+current artifact every round**: the history holds the discussion, not a canonical copy of the
+file, so sending only a delta risks a critique of a version that no longer exists.
 
-1. Round 1: send the full artifact and the question. Capture the conversation ID.
-2. **Validate before reading anything into the result**: check the sentinel and read stderr.
-   A round without its sentinel is discarded and re-run, never summarised.
-3. Parse findings, summarise to the user, propose fixes.
-4. **Gate 1, apply fixes.** Ask `yes-all / per-finding / skip`.
-5. **Gate 2, continue or stop.** Re-state the original one-sentence brief. Ask
-   `continue / stop / switch-mode`.
-6. Round N: resume the conversation ID **and supply the current artifact again**.
-7. Stop when the verdict is affirmative and no findings remain open, or the user stops, or
-   drift appears, or the current artifact cannot be supplied.
-
-**Fast path.** When the user has already asked you to iterate to convergence ("review and fix
-until clean", "run until it converges"), that instruction *is* both gates. Apply clear wins
-and keep going without stopping to ask each round. Keep the stop conditions in step 7, keep
-surfacing tradeoffs that change scope or behaviour, and still report each round's findings.
-Pausing twice per round against a standing instruction to iterate is friction, not diligence.
-
-**Supply the exact current artifact every round.** A resumed conversation carries the
-discussion, and it does not hold a canonical copy of the file. Sending only a delta risks the
-reviewer critiquing a version that no longer exists. Use the session for prior findings and
-rationale, and let each round re-read the artifact as it now stands.
-
-### Anti-pattern: the scope-drift spiral
+Stop when the verdict is affirmative and your own check finds nothing unresolved, or the user
+stops, or the current artifact cannot be supplied, or the loop has turned inward.
 
 **The loop is excellent at deepening a design and poor at questioning its direction.** Each
-round's findings look individually plausible, while the cumulative effect can pull the
-artifact somewhere the user never asked for. Plausible is not correct: verify them. Signs:
+round's findings look individually plausible while the cumulative effect pulls the artifact
+somewhere the user never asked for. Two signs it has turned inward, both meaning the approach
+itself goes on the table rather than the next fix:
 
-- The artifact grows by hundreds of lines per round.
-- New rounds find issues in *fixes from prior rounds*.
-- The user answers "yes-all" every time with no pushback.
-- Simplification findings get absorbed as refactors ("merge X and Y") instead of acting as
-  stop signals ("did we need either?").
+- New rounds find issues in *fixes from prior rounds* rather than in the original artifact. A
+  falling finding count is consistent with this and with real convergence, so the count settles
+  nothing.
+- Simplification findings get absorbed as refactors ("merge X and Y") instead of acting as stop
+  signals ("did we need either?").
 
-What to do: re-state the original brief at every Gate 2 and ask whether the next round still
-serves it. Weight Simplifications at least as heavily as Breakage, since the default bias runs
-toward addition. If a round grows the artifact by more than half, stop and re-confirm scope.
-Treat routine "yes-all" as a prompt to add friction and offer remove-this options alongside
-add-machinery ones.
+So re-state the original brief when you ask whether to continue, and weight Simplifications at
+least as heavily as Breakage, since the default bias runs toward addition.
 
 ## Handling Output
 
-- **Extract, do not relay.** Summarise findings, disagreements, and next steps. Quote the
-  reviewer's own wording where the exact phrasing carries the finding.
-- If it disagrees with your approach, present both perspectives.
-- **Weigh add-machinery findings before relaying.** For a finding that adds code, config, or
-  process, state the smallest version of the fix and whether removing something closes the same
-  hole. Attribute a smaller alternative you worked out yourself to yourself: the reviewer did not
-  say it, and the fidelity rules below forbid presenting it as though it did. Present a finding
-  whose only payoff is ceremony as optional, and label it as such. A review that comes back with
-  additions and no cuts is one-sided. Say so; a finding count is not a verdict.
-- **Validate every cited file path and line number against the actual codebase.** Cited
-  references can be hallucinated.
-- **Expect confident false positives, and check the checkable ones before acting.** Findings
-  arrive at a uniform pitch whether or not they are right: a run may assert that a CLI
-  subcommand does not exist, or that a working recipe is broken, in the same tone as a finding
-  that holds. A claim about a command, a flag, or a file is cheap to settle by running it, so
-  settle it. The cost of skipping that is not a wasted round, it is editing correct text into
-  incorrect text on a reviewer's say-so.
-- **An affirmative verdict is not evidence either.** A run can report convergence with real
-  problems still in the artifact, then find them the moment a later prompt names them. Treat
-  "nothing open" as this round finding nothing, and let a second reviewer or your own check
-  decide whether the work is done.
-- If output is generic, retry once with a narrower question. Do not retry twice.
+- **Extract, do not relay.** Summarise findings, disagreements and next steps, quoting the
+  reviewer's own wording where the phrasing carries the finding. Present both perspectives when
+  it disagrees with your approach.
+- **Weigh add-machinery findings before relaying.** State the smallest version of the fix and
+  whether removing something closes the same hole. Attribute a smaller alternative you worked out
+  yourself to yourself. Label a ceremony-only suggestion optional.
+- **Verify the checkable claims before acting**, including commands, flags, and every cited path
+  and line number. A claim about a command is cheap to settle by running it, and the cost of
+  skipping that is editing correct text into incorrect text on a reviewer's say-so.
+- **An affirmative verdict is not evidence.** A run can report convergence with real problems
+  still in the artifact. Treat "nothing open" as this round finding nothing, and let your own
+  check decide whether the work is done.
+- If output is generic, retry once with a narrower question.
 
 ## Summarization Fidelity
 
-Three rules.
+Before presenting a summary, check it against the source.
 
-### 1. Quote evaluative language verbatim
+1. **Quote evaluative language verbatim.** "I disagree" is weaker than "rejects"; "too narrow"
+   is weaker than "misses an entire class". Quote the verb rather than reaching for a stronger
+   synonym.
+2. **Add no explanatory bridge the source does not contain.** When it makes a bare claim without
+   an example, do not supply one from elsewhere in your context. Connecting two true facts is
+   fabrication if the reviewer did not connect them.
+3. **Count citations in prose as well as in bullets.** `file:line` references often sit inside an
+   explanatory sentence, and enumerating only the list markers undercounts them.
 
-Quote the verb. "I disagree" is weaker than "rejects". "Too narrow" is weaker than
-"misses an entire class". When compressing, quote the verb rather than reaching for a stronger
-synonym.
-
-### 2. Do not add explanatory bridges absent from the source
-
-When it makes a bare claim without an example, do not supply one from elsewhere in your
-context. Connecting two true facts is fabrication if the reviewer did not connect them.
-
-### 3. Count inline citations in prose, not just bullets
-
-`file:line` references often sit inside an explanatory sentence. Scan the prose when counting
-call sites, or you will undercount.
-
-### QA for high-stakes modes
-
-After summarising `red-team`, `diff-review`, `exhausted-hypotheses`, or `attack-surface`
-output, re-read your summary against the three rules above before presenting it: quote every
-evaluative verb verbatim, count inline citations as well as bullets, and check each cited path
-against the repository.
+Check each cited path against the repository, and correct what the check finds before presenting.
