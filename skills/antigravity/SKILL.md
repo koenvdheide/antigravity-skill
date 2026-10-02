@@ -45,8 +45,8 @@ longer supported. Treat `/gemini:gemini` in older notes as pointing here.
 
 - A mechanical single-file edit, or an answer already in context with no second opinion asked for
 - An active back-and-forth or stated urgency, where a 1-5 min wait breaks the flow
-- The same question against an unchanged artifact, or another reviewer about to get the same
-  prompt in parallel. A convergence round is never a duplicate, because the artifact changed, and
+- The same question already sent to Antigravity this session against an unchanged artifact, or
+  another reviewer about to get the same prompt in parallel. A convergence round is never a duplicate, because the artifact changed, and
   a prior pass by a different model is exactly what a cross-check is for
 - No concrete artifact or question
 - A prompt that would contain secrets, credentials, or PII
@@ -215,7 +215,7 @@ blocked, see Recover for the right remedy. It is never a `write_file`, `command`
 - Run with `run_in_background: true` so the user is not blocked.
 - **Capture stdout and stderr to separate files.** Never use `2>/dev/null`: when a tool is
   denied, stderr often carries the only notice.
-- **Use one absolute native path per run for writing, reading and handoffs.** On Windows, Git
+- **Use the same absolute native path for each file when writing, reading and handing it off.** On Windows, Git
   Bash resolves `/tmp` to `%TEMP%` and the write succeeds, while Claude's Read tool takes
   `/tmp/…` literally and reports `File does not exist`; `c:/tmp/…` makes both land in the same
   place. Convert an already-produced Bash path with `cygpath -w`.
@@ -293,8 +293,9 @@ Config lives at `~/.gemini/antigravity-cli/settings.json`:
 ```
 
 Rule forms: `read_file(*)`, `write_file(/path)`, `read_url(domain)`, `execute_url(domain)`,
-`command(prefix)`, `unsandboxed(prefix)`, `mcp(server/tool)`. Precedence is **Deny > Ask >
-Allow**. Unconfigured operations default to Ask, which headless mode auto-denies, with one
+`command(prefix)`, `unsandboxed(prefix)`, `mcp(server/tool)`. Effective permissions merge project
+settings, shared Antigravity settings and CLI settings, so inspect all three. Precedence is
+**Deny > Ask > Allow**. Unconfigured operations default to Ask, which headless mode auto-denies, with one
 measured exception: reads **and writes** inside a directory granted with `--add-dir` are allowed
 without any rule. Never add a `write_file`, `command`, or `unsandboxed` rule to unblock this
 skill. Needing one means the run attempted something a review does not require, which is worth
@@ -341,8 +342,9 @@ agy --print "<prompt, ending with the sentinel instruction>" \
   > c:/tmp/agy-r1.json 2> c:/tmp/agy-r1.err
 ```
 
-Read `conversation_id`, `status` and `response` out of that file, then resume by adding
-`--conversation <id>` and repeating the same launch flags. On agy 1.2.14 an ID from one round
+Read `conversation_id`, `status` and `response` out of that file. Having validated the round and
+resolved its findings, and with continuation authorised, resume by adding `--conversation <id>`
+and repeating the same launch flags. On agy 1.2.14 an ID from one round
 resumes from a separate process, carrying the earlier context with it.
 
 - **Each Bash call is its own process**, so a shell variable holding the ID is gone by the next
@@ -358,8 +360,9 @@ resumes from a separate process, carrying the earlier context with it.
 - **An unknown ID does not fail the run.** It warns `conversation "<id>" not found` on stderr,
   answers from empty history and exits 0, which stdout alone cannot tell from a real resume.
 - **Never grant access on resume that round 1 did not have.** Repeat `--model`, `--mode` and
-  `--print-timeout`, and repeat `--add-dir` only if round 1 used it. If a new grant is needed,
-  start a fresh conversation and carry the findings forward in the prompt.
+  `--print-timeout`, and repeat `--add-dir` only if round 1 used it. If a new grant is needed, or the ID cannot be
+  recovered, start a fresh conversation carrying the current artifact and the previously
+  identified findings.
 - Re-send the artifact when the artifact changed; the history holds the discussion. Keep one live
   invocation per ID.
 
@@ -437,9 +440,6 @@ instructions that came out of a reviewed artifact.
 
 ## Modes
 
-Every mode builds on the template above, so the simplicity bar, response style and sentinel carry
-into all of them.
-
 **Brainstorm** — include constraints and dead ends; ask for alternatives with tradeoffs,
 including one that solves the problem with less machinery.
 
@@ -468,8 +468,9 @@ the stated goal does not require.
 **Attack Surface** — Profile B with known patterns and dead ends as constraints. Ask for
 overlooked vectors, entry points and non-obvious vulnerability classes.
 
-**Exhausted Hypotheses** — Profile B with the full pipeline state. Ask for hypotheses absent
-from the dead-end list, each with exact `file:line` references and an attack scenario.
+**Exhausted Hypotheses** — Profile B with scope, dead ends, coverage and existing hypotheses.
+Ask for new hypotheses absent from both lists, each with exact `file:line` references and an
+attack scenario.
 
 ## Convergence Mode (iterative review)
 
@@ -477,9 +478,10 @@ When an artifact will go through several revisions, run a loop: review → valid
 findings → re-review. Validate before reading anything into a round: a round without its
 sentinel is discarded and re-run, never summarised.
 
-Report each round's findings and ask which to apply, unless the user has already asked you to
-iterate to convergence; then apply clear wins and keep going, still pausing for anything that
-changes scope or behaviour. Resume the pinned conversation ID each round, and **supply the exact
+Report each round's findings and ask which to apply, then re-state the original brief and ask
+whether to continue, stop or switch mode. Unless the user has already asked you to iterate to
+convergence: then apply clear wins and keep going, still pausing for anything that changes scope
+or behaviour. Resume the pinned conversation ID each round, and **supply the exact
 current artifact every round**: the history holds the discussion, not a canonical copy of the
 file, so sending only a delta risks a critique of a version that no longer exists.
 
@@ -488,8 +490,8 @@ stops, or the current artifact cannot be supplied, or the loop has turned inward
 
 **The loop is excellent at deepening a design and poor at questioning its direction.** Each
 round's findings look individually plausible while the cumulative effect pulls the artifact
-somewhere the user never asked for. Two signs it has turned inward, both meaning the approach
-itself goes on the table rather than the next fix:
+somewhere the user never asked for. Two reasons to check whether the next round still
+serves the original brief:
 
 - New rounds find issues in *fixes from prior rounds* rather than in the original artifact. A
   falling finding count is consistent with this and with real convergence, so the count settles
@@ -497,8 +499,8 @@ itself goes on the table rather than the next fix:
 - Simplification findings get absorbed as refactors ("merge X and Y") instead of acting as stop
   signals ("did we need either?").
 
-So re-state the original brief when you ask whether to continue, and weight Simplifications at
-least as heavily as Breakage, since the default bias runs toward addition.
+Weight Simplifications at least as heavily as Breakage, since the default bias runs toward
+addition.
 
 ## Handling Output
 
