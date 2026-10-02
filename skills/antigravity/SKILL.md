@@ -223,14 +223,10 @@ tail -1 c:/tmp/agy-explain-parser.out | tr -d '\r' \
 | Flag | Purpose |
 |------|---------|
 | `-p` / `--print` | Run one prompt non-interactively and print the response. Also aliased `--prompt`. |
-| `--mode plan` | Execution mode, and the default for every mode in this skill. The alternative, `accept-edits`, is for changing files, which this skill never does. |
-| `--model <id>` | Pin the model. Always set it (see Model selection). |
+| `--mode plan` | Execution mode, and the default for every mode in this skill. It is not read-only; see what `--add-dir` grants. The alternative is `accept-edits`. |
 | `--add-dir <abs>` | Add a directory to the workspace, repeatable. **Absolute paths only**; a relative path fails with "must be an absolute path". |
-| `--print-timeout <dur>` | Wait before giving up. Defaults to `0s`, which waits until the turn completes. Set `15m` to bound a run. |
 | `--output-format <fmt>` | `text` (default) or `json`. JSON wraps the reply in an envelope carrying `conversation_id` and `status`. |
 | `--log-file <path>` | Redirect the CLI log. |
-| `--conversation <id>` | Resume a specific conversation by ID. |
-| `-c` / `--continue` | Resume the most recent conversation. Racy; see Sessions. |
 | `--sandbox` | Run with terminal restrictions. Platform support varies, so treat it as defence in depth on top of the permission gate rather than a guarantee, and confirm it applies on your platform before relying on it. |
 
 ### Flags `agy` does not have
@@ -347,12 +343,9 @@ shape narrows the search; it does not prove why a run failed.
 | Empty stdout, exit 0, stderr names `write_file`, `command`, or `unsandboxed` | An operation outside what a review needs was attempted; the refusal does not say whether the prompt asked for it | **Do not grant it.** A review never needs to write or shell out. Narrow the prompt to analysis, and check what the run actually attempted before assuming the prompt caused it |
 | Stdout has narration but no sentinel | Run stopped early. A blocked tool is one cause; timeout, dropped auth, or network failure look the same | Discard output. Read stderr to identify the cause, then re-run after inlining the content, relocating the artifact, or raising the timeout. Never unblock it by granting a write or command rule |
 | No sentinel, stderr empty | Output shape cannot select a unique cause: an unfenced artifact that swallowed the sentinel instruction, a silently blocked tool, a timeout and a dropped connection all look like this | Discard the result. Re-read the prompt for an unfenced artifact, read stderr, and verify independently any effect the output narrates. Re-run only after an evidenced correction |
-| "must be an absolute path" | A relative path reached `--add-dir` or a tool | Pass absolute paths; on Git Bash use `$(cygpath -w …)` |
 | "You are not logged into Antigravity" | Auth expired or absent | Log in to Antigravity again; the CLI reads a keyring-backed OAuth token |
 | Allow-rule added but still denied | Permissions merge across project settings, shared Antigravity settings, and CLI settings, with **Deny > Ask > Allow** | Inspect the *effective* policy and look for a higher-precedence Deny or Ask, rather than adding another Allow |
 | Empty stdout, **exit 2**, stderr opens `flags provided but not defined:` | A flag that does not exist on `agy`, usually carried over from another CLI wrapper | Check it against the flag list above. Usual culprits: `--output-file`, `-o`, `--approval-mode`, `-s`, `--allowed-mcp-server-names` |
-| Model rejected | Stale model ID | Run `agy models` and pick from the live list |
-| Answer ignores everything earlier rounds established | `--conversation` missed and started an empty history | Check stderr for `conversation "<id>" not found`, recapture the ID, and re-send what the round needs |
 | Empty stdout, exit 0, stderr names `read_file`, and the artifact was fully inlined | The model went looking for files it had already been given. Inlining does not establish that no rule shadowed the path, so check the refused target against the effective policy before assuming either | Re-run under Profile B with the directory granted. Failing that, re-run under A telling it the artifact is complete and no tool call is needed |
 
 ### Permissions
@@ -704,7 +697,3 @@ After summarising `red-team`, `diff-review`, `exhausted-hypotheses`, or `attack-
 output, re-read your summary against the three rules above before presenting it: quote every
 evaluative verb verbatim, count inline citations as well as bullets, and check each cited path
 against the repository.
-
-**Short-output exception:** the pass can be skipped for output under roughly 200 words with no
-bullets, numbered findings or `file:line` citations. That is a cost decision, not a guarantee:
-strength amplification fits in a single sentence.
