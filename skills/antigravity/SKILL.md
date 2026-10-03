@@ -316,8 +316,12 @@ card when the choice matters.
 
 Set the effort suffix from the mode: `-medium` for Explain and any prose pass, `-high` for
 Brainstorm, Red-team, Diff Review, Attack Surface and Exhausted Hypotheses. Suffixes vary by
-release and the Pro line omits `-medium` entirely. Prefer the suffix to the separate `--effort`
-flag, and do not assume the two compose.
+release and the Pro line omits `-medium` entirely. **The suffix and `--effort` are mutually
+exclusive**, measured on 1.2.14: a suffixed id with `--effort` fails `conflicts with
+--effort=<level>`, and a bare id without one fails `requires --effort`. Either error names the
+levels that model actually offers, which is the cheapest way to find them. `--help` gives the
+flag's grammar across every family `agy` serves, `claude-*` included, so the `xhigh` and `max` it
+lists belong to no Gemini model.
 
 Flash is also the right default for a convergence loop, which pays the model cost once per round
 and wants rounds rather than waits.
